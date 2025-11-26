@@ -398,9 +398,68 @@ function recalcAndRender() {
       "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮不受影響）。";
   }
 
-  processedRows = baseRows.map((row) => {
-    let unitPrice = 0;  // 最後都視為「台幣 / 米」
-    let cost = 0;
+processedRows = baseRows.map((row) => {
+  let unitPrice = 0;  // 台幣 / 米
+  let cost = 0;
+
+  const codeUpper = (row.itemCode || "").toUpperCase();
+
+  // ⭐ CFT-3 / CFT-6 一律不計成本
+  if (codeUpper.startsWith("CFT-3") || codeUpper.startsWith("CFT-6")) {
+    const profit = row.amount; // 成本=0 → 毛利=銷售額
+    return {
+      ...row,
+      unitPrice: 0,
+      cost: 0,
+      profit,
+    };
+  }
+
+  // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
+  const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm);
+  if (yunlinUnit != null) {
+    unitPrice = yunlinUnit;
+    cost = unitPrice * row.meters;
+  } else {
+    // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
+    const supplierFromCode = getSupplierFromItemCode(row.itemCode);
+    const mmKey = row.specMm != null ? String(row.specMm) : null;
+
+    if (supplierFromCode && mmKey && hasRate && costMap.size) {
+      let basePrice = null;
+
+      const mmFloat = parseFloat(mmKey);
+      const candidates = [
+        `${supplierFromCode}|${mmKey}`,
+        mmFloat ? `${supplierFromCode}|${mmFloat}` : null,
+        mmKey,
+        mmFloat ? String(mmFloat) : null,
+      ].filter(Boolean);
+
+      for (const k of candidates) {
+        if (costMap.has(k)) {
+          basePrice = costMap.get(k);
+          break;
+        }
+      }
+
+      if (Number.isFinite(basePrice)) {
+        unitPrice = basePrice * rateVal; // 台幣 / 米
+        cost = unitPrice * row.meters;
+      }
+    }
+  }
+
+  const profit = row.amount - cost;
+
+  return {
+    ...row,
+    unitPrice,
+    cost,
+    profit,
+  };
+});
+
 
     // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
     const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm);
@@ -432,7 +491,7 @@ function recalcAndRender() {
       cost,
       profit,
     };
-  });
+  };
 
   // ❌ 排除不需要列出的品項 Z043 / Z044
   processedRows = processedRows.filter((row) => {
@@ -444,7 +503,7 @@ function recalcAndRender() {
   saveToLocalStorage();
 
   renderTable();
-}
+
 
 /***********************
  * 畫表格（含物品編號＋總計）
