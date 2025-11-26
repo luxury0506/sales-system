@@ -296,16 +296,17 @@ function handleSalesFile(e) {
         const row = rows[r];
         if (!row) continue;
 
-        // 客戶名稱:(CH049)世僖
-        const firstCell = safeCell(row[0]);
-        const customerMatch = firstCell.match(/^客戶名稱[:：]\((.+?)\)/);
-        if (customerMatch) {
-          // 原字串是 "(CH049)世僖"
-          const raw = customerMatch[1].trim(); // CH049)世僖
-          // 這裡先不拆 code / name，直接整串存起來即可
-          currentCustomer = raw;
-          continue;
-        }
+      // 客戶名稱:(CH049)世僖  → 要變成 "CH049 世僖"
+      const firstCell = safeCell(row[0]);
+      const customerMatch = firstCell.match(/^客戶名稱[:：]\(([^)]+)\)\s*(.*)$/);
+      if (customerMatch) {
+        const code = customerMatch[1].trim(); // CH049
+        const name = customerMatch[2].trim(); // 世僖
+        const full = name ? `${code} ${name}` : code; // CH049 世僖
+        currentCustomer = full;
+        continue;
+      }
+
 
         const itemCode =
           itemCodeColIndex !== -1 ? safeCell(row[itemCodeColIndex]) : "";
