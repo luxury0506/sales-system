@@ -160,6 +160,7 @@ const statusEl = document.getElementById("status");
 const tableContainer = document.getElementById("tableContainer");
 const resultTbody = document.getElementById("resultTbody");
 const downloadBtn = document.getElementById("downloadBtn");
+const clearDataBtn = document.getElementById("clearDataBtn");
 
 /***********************
  * 全域資料
@@ -203,6 +204,9 @@ if (exchangeRateInput) {
 }
 if (downloadBtn) {
   downloadBtn.addEventListener("click", downloadExcel);
+}
+if (clearDataBtn) {
+  clearDataBtn.addEventListener("click", clearAnalysisData);
 }
 
 /***********************
@@ -506,6 +510,23 @@ function renderTable() {
 
   tableContainer.classList.remove("hidden");
   downloadBtn.classList.remove("hidden");
+}
+
+/***********************
+ * 手動清除分析資料
+ ************************/
+function clearAnalysisData() {
+  try {
+    localStorage.removeItem("salesAnalysisData");
+  } catch (e) {
+    console.error("清除 localStorage 失敗：", e);
+  }
+  baseRows = [];
+  processedRows = [];
+  resultTbody.innerHTML = "";
+  tableContainer.classList.add("hidden");
+  downloadBtn.classList.add("hidden");
+  statusEl.textContent = "已清除分析資料，請重新上傳銷售檔。";
 }
 
 /***********************

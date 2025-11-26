@@ -95,6 +95,31 @@
       <div id="status" class="text-sm text-slate-700 mt-1"></div>
     </section>
 
+      <div class="flex items-center gap-2 mt-2">
+    <input
+      id="exchangeRate"
+      type="number"
+      step="0.0001"
+      class="border rounded px-2 py-1 text-sm w-32"
+      placeholder="匯率"
+    />
+    <button
+      id="applyRateBtn"
+      class="px-3 py-1.5 rounded text-xs font-medium bg-blue-500 text-white hover:bg-blue-600"
+    >
+      套用匯率重新計算
+    </button>
+
+    <!-- ⭐ 新增這顆 -->
+    <button
+      id="clearDataBtn"
+      class="px-3 py-1.5 rounded text-xs font-medium bg-slate-200 text-slate-700 hover:bg-slate-300"
+    >
+      清除分析資料
+    </button>
+  </div>
+
+
     <!-- 匯出按鈕 -->
     <div class="flex items-center justify-between">
       <button
