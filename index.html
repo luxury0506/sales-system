@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>銷貨換算與成本試算</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS 讀取 Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+
+<body class="min-h-screen bg-slate-100">
+  <div class="max-w-6xl mx-auto py-8 px-4 space-y-6">
+    <header>
+      <h1 class="text-2xl font-bold text-slate-800">
+        銷貨換算與成本試算（主頁面）
+      </h1>
+      <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+        1️⃣ 上傳每日銷售明細 <br>
+        2️⃣ 輸入當月銀行匯率（台幣／人民幣） <br>
+        銷貨成本依內建的成本資料（由《大陸成富報價單(2022表格).xlsx》整理）＋匯率自動計算。<br>
+        每筆會顯示：<b>品名、銷貨量、換算米數、銷貨金額、銷貨成本、銷貨毛利</b>。
+      </p>
+    </header>
+
+    <!-- 上方導航標籤 -->
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800">每日銷貨換算與毛利試算</h1>
+    <p class="text-sm text-slate-600 mt-1">
+      上傳每日銷貨明細，系統自動換算米數、成本與毛利，並將結果提供給其他分析頁面使用。
+    </p>
+  </div>
+
+  <div class="flex gap-2">
+    <!-- 連到客戶統計頁 -->
+    <a
+      href="customer.html"
+      class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+             bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+    >
+      📊 客戶別統計
+    </a>
+
+    <!-- 連到進貨成本比較頁 -->
+    <a
+      href="cost.html"
+      class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+             bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+    >
+      💹 進貨成本比較
+    </a>
+  </div>
+</div>
+
+    <!-- 上傳與匯率設定 -->
+    <section class="bg-white shadow rounded-xl p-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          1️⃣ 上傳每日銷售明細 Excel（活頁簿1.xlsx 那種）
+        </label>
+        <input
+          type="file"
+          id="salesFile"
+          accept=".xlsx,.xls"
+          class="block w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-100 hover:file:bg-slate-200"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          2️⃣ 輸入匯率（台幣／人民幣）
+        </label>
+        <div class="flex items-center space-x-2">
+          <input
+            type="number"
+            id="exchangeRate"
+            step="0.0001"
+            class="w-40 border rounded px-2 py-1 text-sm"
+            placeholder="例如：4.5"
+          />
+          <button
+            id="applyRateBtn"
+            class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+          >
+            套用匯率重新計算
+          </button>
+        </div>
+        <p class="mt-1 text-xs text-slate-500">
+          銷貨成本公式：<b>成本 = 銷貨米數 × 每米單價 × 匯率</b>（每米單價來自 cost-data.js）。<br>
+          銷貨毛利：<b>銷貨金額 − 銷貨成本</b>。
+        </p>
+      </div>
+
+      <div id="status" class="text-sm text-slate-700 mt-1"></div>
+    </section>
+
+    <!-- 匯出按鈕 -->
+    <div class="flex items-center justify-between">
+      <button
+        id="downloadBtn"
+        class="hidden inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+      >
+        下載計算後 Excel
+      </button>
+    </div>
+
+    <!-- 結果表格 -->
+    <section
+      id="tableContainer"
+      class="bg-white shadow rounded-xl p-4 overflow-auto hidden"
+    >
+      <h2 class="text-sm font-semibold text-slate-700 mb-3">
+        單日銷貨明細（換算米數＋成本＋毛利）
+      </h2>
+      <table class="min-w-full text-xs text-left border">
+        <thead class="bg-slate-50">
+          <tr>
+            <th class="border px-2 py-1">物品編號</th>
+            <th class="border px-2 py-1">品名</th>
+            <th class="border px-2 py-1 text-right">銷貨量</th>
+            <th class="border px-2 py-1 text-right">換算米數</th>
+            <th class="border px-2 py-1 text-right">銷貨金額</th>
+            <th class="border px-2 py-1 text-right">銷貨成本</th>
+            <th class="border px-2 py-1 text-right">銷貨毛利</th>
+          </tr>
+        </thead>
+        <tbody id="resultTbody" class="divide-y"></tbody>
+      </table>
+    </section>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="cost-data.js"></script>
+<script src="app.js"></script>
+
+
+</body>
+</html>

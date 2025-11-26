@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>進貨成本比較分析</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="min-h-screen bg-slate-100">
+  <div class="max-w-6xl mx-auto py-6 px-4 space-y-6">
+    <header class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">進貨成本比較分析</h1>
+        <p class="text-sm text-slate-600 mt-1">
+          依物品編號彙總銷貨米數、平均售價與平均成本，觀察不同產品的毛利狀況。<br>
+          資料來源：請先在主頁完成計算，本頁會讀取分析結果。
+        </p>
+      </div>
+      <a
+        href="index.html"
+        class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+      >
+        回到主頁
+      </a>
+    </header>
+
+    <section class="bg-white shadow rounded-xl p-4 space-y-3">
+      <div id="status" class="text-sm text-slate-700"></div>
+
+      <div class="flex items-center justify-end gap-2">
+        <button
+          id="downloadItemExcel"
+          class="hidden inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600"
+        >
+          匯出品項成本比較 Excel
+        </button>
+      </div>
+
+      <div class="overflow-auto max-h-[480px] border rounded-lg">
+        <table class="min-w-full text-xs text-left">
+          <thead class="bg-slate-50 sticky top-0">
+            <tr>
+              <th class="border px-2 py-1">物品編號</th>
+              <th class="border px-2 py-1">品名</th>
+              <th class="border px-2 py-1 text-right">總米數</th>
+              <th class="border px-2 py-1 text-right">銷售額</th>
+              <th class="border px-2 py-1 text-right">銷貨成本</th>
+              <th class="border px-2 py-1 text-right">毛利</th>
+              <th class="border px-2 py-1 text-right">平均售價/米</th>
+              <th class="border px-2 py-1 text-right">平均成本/米</th>
+              <th class="border px-2 py-1 text-right">毛利率</th>
+            </tr>
+          </thead>
+          <tbody id="itemTbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="bg-white shadow rounded-xl p-4 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-700">品項毛利比較（前10名）</h2>
+      <canvas id="itemProfitChart" height="160"></canvas>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="cost-analysis.js"></script>
+</body>
+</html>
