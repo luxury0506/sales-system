@@ -296,16 +296,42 @@ function handleSalesFile(e) {
         const row = rows[r];
         if (!row) continue;
 
-      // 客戶名稱:(CH049)世僖  → 要變成 "CH049 世僖"
-      const firstCell = safeCell(row[0]);
-      const customerMatch = firstCell.match(/^客戶名稱[:：]\(([^)]+)\)\s*(.*)$/);
-      if (customerMatch) {
-        const code = customerMatch[1].trim(); // CH049
-        const name = customerMatch[2].trim(); // 世僖
-        const full = name ? `${code} ${name}` : code; // CH049 世僖
-        currentCustomer = full;
-        continue;
-      }
+        // 解析客戶名稱列，例如：
+        // 1) "客戶名稱:(CH049)世僖"
+        // 2) "客戶名稱: (TC107)台中某公司"
+        // 3) "客戶名稱:TC105"
+        // 4) "客戶名稱: TC105 台中某公司"
+        const firstCell = safeCell(row[0]);
+        const customerLineMatch = firstCell.match(/^客戶名稱[:：]\s*(.+)$/);
+        if (customerLineMatch) {
+          const body = customerLineMatch[1].trim(); // 拿掉「客戶名稱:」
+
+          let code = "";
+          let name = "";
+
+          // 情況一："(CH049)世僖"
+          let mParen = body.match(/^\(([^)]+)\)\s*(.*)$/);
+          if (mParen) {
+            code = mParen[1].trim();        // CH049
+            name = mParen[2].trim();        // 世僖
+          } else {
+            // 情況二："TC105 台中某公司" 或 "TC105"
+            let mCodeName = body.match(/^([A-Za-z0-9]+)\s*(.*)$/);
+            if (mCodeName) {
+              code = mCodeName[1].trim();   // TC105
+              name = mCodeName[2].trim();   // 台中某公司 (可能為空字串)
+            } else {
+              // 其它奇怪格式，就整串當成名稱
+              code = body;
+              name = "";
+            }
+          }
+
+          const full = name ? `${code} ${name}` : code; // 有名字就 "代碼 名稱"，沒有就單純代碼
+          currentCustomer = full;
+          continue; // 這一列只用來設定客戶，不是銷貨資料
+        }
+
 
 
         const itemCode =
