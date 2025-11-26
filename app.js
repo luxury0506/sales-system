@@ -144,6 +144,54 @@ function getYunlinUnitPrice(itemCode, specMm) {
 
   return null;
 }
+/***********************
+ * 從 COST_MAP 取順博 / 瑞普的「每米人民幣單價」
+ * 支援兩種格式：
+ *  - Map：      new Map([[ "shunbo|3.0", 0.12 ], ...])
+ *  - 一般物件： { "shunbo|3.0": 0.12, "3.0": 0.12, ... }
+ ************************/
+function getBasePriceFromCostTable(mmKey, supplier) {
+  const raw = window.COST_MAP;
+  if (!raw) return null;
+
+  const mmStr = String(mmKey);
+  const mmFloat = parseFloat(mmKey);
+  const candidates = [];
+
+  // 有供應商資訊就先試 supplier|mm
+  if (supplier) {
+    candidates.push(`${supplier}|${mmStr}`);
+    if (!Number.isNaN(mmFloat)) {
+      candidates.push(`${supplier}|${mmFloat}`);
+    }
+  }
+  // 再退而求其次只用 mm 當 key
+  candidates.push(mmStr);
+  if (!Number.isNaN(mmFloat)) {
+    candidates.push(String(mmFloat));
+  }
+
+  // 1) COST_MAP 是 Map
+  if (raw instanceof Map) {
+    for (const k of candidates) {
+      if (raw.has(k)) {
+        const val = raw.get(k);
+        if (Number.isFinite(val)) return val;
+      }
+    }
+  }
+  // 2) COST_MAP 是一般物件
+  else if (typeof raw === "object") {
+    for (const k of candidates) {
+      if (Object.prototype.hasOwnProperty.call(raw, k)) {
+        const val = raw[k];
+        if (Number.isFinite(val)) return val;
+      }
+    }
+  }
+
+  return null;
+}
 
 /***********************
  * DOM 元素
@@ -418,31 +466,15 @@ function recalcAndRender() {
       const supplierFromCode = getSupplierFromItemCode(row.itemCode);
       const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-      // 只有真的判斷出是順博 / 瑞普的料號，才去抓成本
-      if (supplierFromCode && mmKey && hasRate && costMap.size) {
-        let basePrice = null;
-
-        const mmFloat = parseFloat(mmKey);
-        const candidates = [
-          `${supplierFromCode}|${mmKey}`,
-          mmFloat ? `${supplierFromCode}|${mmFloat}` : null,
-          mmKey,
-          mmFloat ? String(mmFloat) : null,
-        ].filter(Boolean);
-
-        for (const k of candidates) {
-          if (costMap.has(k)) {
-            basePrice = costMap.get(k);
-            break;
-          }
-        }
-
+      if (supplierFromCode && mmKey && hasRate) {
+        const basePrice = getBasePriceFromCostTable(mmKey, supplierFromCode);
         if (Number.isFinite(basePrice)) {
-          unitPrice = basePrice * rateVal; // 台幣 / 米
+          unitPrice = basePrice * rateVal; // 人民幣 / 米 × 匯率 → 台幣 / 米
           cost = unitPrice * row.meters;
         }
       }
     }
+
 
     const profit = row.amount - cost;
 
