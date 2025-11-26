@@ -408,37 +408,21 @@ function recalcAndRender() {
       unitPrice = yunlinUnit;
       cost = unitPrice * row.meters;
     } else {
-      // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
-      const supplierFromCode = getSupplierFromItemCode(row.itemCode);
-      let supplier = supplierFromCode;
-      const mmKey = row.specMm != null ? String(row.specMm) : null;
+  // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
+  const supplierFromCode = getSupplierFromItemCode(row.itemCode);
+  const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-      if (mmKey && costMap.size) {
-        // 2-1 依物品編號指定的供應商尋找
-        if (supplier) {
-          const key = `${supplier}|${mmKey}`;
-          const basePrice = costMap.get(key);
-          if (Number.isFinite(basePrice) && hasRate) {
-            unitPrice = basePrice * rateVal; // 台幣 / 米
-          }
-        }
-
-        // 2-2 找不到就 fallback：先順博再瑞普
-        if (!unitPrice && hasRate) {
-          const keyShunbo = `shunbo|${mmKey}`;
-          const keyRuipu = `ruipu|${mmKey}`;
-          if (costMap.has(keyShunbo)) {
-            unitPrice = costMap.get(keyShunbo) * rateVal;
-          } else if (costMap.has(keyRuipu)) {
-            unitPrice = costMap.get(keyRuipu) * rateVal;
-          }
-        }
-
-        if (unitPrice && hasRate) {
-          cost = unitPrice * row.meters;
-        }
-      }
+  // ⭐ 只有真的判斷出是順博 / 瑞普的料號，才抓成本
+  if (supplierFromCode && mmKey && costMap.size && hasRate) {
+    const key = `${supplierFromCode}|${mmKey}`;
+    const basePrice = costMap.get(key);
+    if (Number.isFinite(basePrice)) {
+      unitPrice = basePrice * rateVal; // 台幣 / 米
+      cost = unitPrice * row.meters;
     }
+  }
+}
+
 
     const profit = row.amount - cost;
 
