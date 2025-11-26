@@ -50,14 +50,6 @@ function formatQtyInt(v) {
  *  - 先抓第一個出現的「xx mm」當規格 specMm
  *  - 只有在有「*」或「x」時，才抓後面的數字當裁切長度 cutMm
  *  - 若找不到裁切長度 → 視為「銷貨量單位就是米」
- *
- * 範例：
- *  - "熱收縮套管 3.5mm * 85 (白)"
- *      → specMm = 3.5, cutMm = 85
- *  - "熱收縮套管 2.0mm * 180mm"
- *      → specMm = 2.0, cutMm = 180
- *  - "玻璃纖維矽套管 10.0mm 1.5KV"
- *      → specMm = 10.0, cutMm = null（⇒ 米數 = 銷貨量）
  ************************/
 function extractMmInfo(name) {
   if (!name) return { specMm: null, cutMm: null };
@@ -100,6 +92,9 @@ function extractMmInfo(name) {
 
 /***********************
  * 判斷供應商（順博 / 瑞普，需匯率）
+ *
+ * FSG-3 / HST → 順博 shunbo
+ * FSG-2 / SRG → 瑞普 ruipu
  ************************/
 function getSupplierFromItemCode(itemCode) {
   if (!itemCode) return null;
@@ -131,11 +126,11 @@ function getYunlinUnitPrice(itemCode, specMm) {
   let colorType = "black";
 
   if (code.endsWith("CB")) {
-    colorType = "thin";           // 超薄
+    colorType = "thin"; // 超薄
   } else if (code.endsWith("C")) {
-    colorType = "transparent";    // 透明
+    colorType = "transparent"; // 透明
   } else if (/(R|BL|G|Y|W)$/.test(code)) {
-    colorType = "color";          // 彩色（含白色 W）
+    colorType = "color"; // 彩色（含白色 W）
   }
 
   const mmKey = String(specMm);
@@ -144,7 +139,7 @@ function getYunlinUnitPrice(itemCode, specMm) {
 
   const price = row[colorType];
   if (typeof price === "number" && price > 0) {
-    return price;                 // 台幣 / 米
+    return price; // 台幣 / 米
   }
 
   return null;
@@ -336,8 +331,6 @@ function handleSalesFile(e) {
           continue; // 這一列只用來設定客戶，不是銷貨資料
         }
 
-
-
         const itemCode =
           itemCodeColIndex !== -1 ? safeCell(row[itemCodeColIndex]) : "";
         const name = safeCell(row[nameColIndex]);
@@ -353,7 +346,7 @@ function handleSalesFile(e) {
         const meters = cutMm != null ? qty * (cutMm / 1000) : qty;
 
         results.push({
-          customer: currentCustomer, // 例如 "CH049)世僖"（之後統計頁再細拆也可以）
+          customer: currentCustomer,
           itemCode,
           name,
           qty,
@@ -381,7 +374,7 @@ function handleSalesFile(e) {
 }
 
 /***********************
- * 主計算：雲林(不套匯率) + 順博/瑞普(要匯率)
+ * 主計算：雲林(不套匯率) + 順博/瑞普(要匯率) + CFT-3/6 不計成本
  ************************/
 function recalcAndRender() {
   if (!baseRows.length) {
@@ -398,68 +391,22 @@ function recalcAndRender() {
       "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮不受影響）。";
   }
 
-processedRows = baseRows.map((row) => {
-  let unitPrice = 0;  // 台幣 / 米
-  let cost = 0;
+  processedRows = baseRows.map((row) => {
+    let unitPrice = 0; // 台幣 / 米
+    let cost = 0;
 
-  const codeUpper = (row.itemCode || "").toUpperCase();
+    const codeUpper = (row.itemCode || "").toUpperCase();
 
-  // ⭐ CFT-3 / CFT-6 一律不計成本
-  if (codeUpper.startsWith("CFT-3") || codeUpper.startsWith("CFT-6")) {
-    const profit = row.amount; // 成本=0 → 毛利=銷售額
-    return {
-      ...row,
-      unitPrice: 0,
-      cost: 0,
-      profit,
-    };
-  }
-
-  // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
-  const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm);
-  if (yunlinUnit != null) {
-    unitPrice = yunlinUnit;
-    cost = unitPrice * row.meters;
-  } else {
-    // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
-    const supplierFromCode = getSupplierFromItemCode(row.itemCode);
-    const mmKey = row.specMm != null ? String(row.specMm) : null;
-
-    if (supplierFromCode && mmKey && hasRate && costMap.size) {
-      let basePrice = null;
-
-      const mmFloat = parseFloat(mmKey);
-      const candidates = [
-        `${supplierFromCode}|${mmKey}`,
-        mmFloat ? `${supplierFromCode}|${mmFloat}` : null,
-        mmKey,
-        mmFloat ? String(mmFloat) : null,
-      ].filter(Boolean);
-
-      for (const k of candidates) {
-        if (costMap.has(k)) {
-          basePrice = costMap.get(k);
-          break;
-        }
-      }
-
-      if (Number.isFinite(basePrice)) {
-        unitPrice = basePrice * rateVal; // 台幣 / 米
-        cost = unitPrice * row.meters;
-      }
+    // ⭐ CFT-3 / CFT-6 一律不計成本
+    if (codeUpper.startsWith("CFT-3") || codeUpper.startsWith("CFT-6")) {
+      const profit = row.amount; // 成本=0 → 毛利=銷售額
+      return {
+        ...row,
+        unitPrice: 0,
+        cost: 0,
+        profit,
+      };
     }
-  }
-
-  const profit = row.amount - cost;
-
-  return {
-    ...row,
-    unitPrice,
-    cost,
-    profit,
-  };
-});
-
 
     // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
     const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm);
@@ -467,21 +414,35 @@ processedRows = baseRows.map((row) => {
       unitPrice = yunlinUnit;
       cost = unitPrice * row.meters;
     } else {
-  // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
-  const supplierFromCode = getSupplierFromItemCode(row.itemCode);
-  const mmKey = row.specMm != null ? String(row.specMm) : null;
+      // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
+      const supplierFromCode = getSupplierFromItemCode(row.itemCode);
+      const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-  // ⭐ 只有真的判斷出是順博 / 瑞普的料號，才抓成本
-  if (supplierFromCode && mmKey && costMap.size && hasRate) {
-    const key = `${supplierFromCode}|${mmKey}`;
-    const basePrice = costMap.get(key);
-    if (Number.isFinite(basePrice)) {
-      unitPrice = basePrice * rateVal; // 台幣 / 米
-      cost = unitPrice * row.meters;
+      // 只有真的判斷出是順博 / 瑞普的料號，才去抓成本
+      if (supplierFromCode && mmKey && hasRate && costMap.size) {
+        let basePrice = null;
+
+        const mmFloat = parseFloat(mmKey);
+        const candidates = [
+          `${supplierFromCode}|${mmKey}`,
+          mmFloat ? `${supplierFromCode}|${mmFloat}` : null,
+          mmKey,
+          mmFloat ? String(mmFloat) : null,
+        ].filter(Boolean);
+
+        for (const k of candidates) {
+          if (costMap.has(k)) {
+            basePrice = costMap.get(k);
+            break;
+          }
+        }
+
+        if (Number.isFinite(basePrice)) {
+          unitPrice = basePrice * rateVal; // 台幣 / 米
+          cost = unitPrice * row.meters;
+        }
+      }
     }
-  }
-}
-
 
     const profit = row.amount - cost;
 
@@ -491,7 +452,7 @@ processedRows = baseRows.map((row) => {
       cost,
       profit,
     };
-  };
+  });
 
   // ❌ 排除不需要列出的品項 Z043 / Z044
   processedRows = processedRows.filter((row) => {
@@ -503,7 +464,7 @@ processedRows = baseRows.map((row) => {
   saveToLocalStorage();
 
   renderTable();
-
+}
 
 /***********************
  * 畫表格（含物品編號＋總計）
