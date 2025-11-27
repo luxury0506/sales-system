@@ -93,16 +93,62 @@ function extractMmInfo(name) {
 /***********************
  * 判斷供應商（順博 / 瑞普，需匯率）
  *
- * FSG-3 / HST → 順博 shunbo
- * FSG-2 / SRG → 瑞普 ruipu
+ * 優先順序：
+ *  1) 先看物品編號包含 FSG-2 / FSG-3 / HST / SRG
+ *  2) 如果物品編號看不出來，再用「品名關鍵字」判斷
+ *
+ * 規則（你提供的對應）：
+ *  - 外玻內矽套管 / 外玻內矽絕緣套管 → HST → 順博 shunbo
+ *  - 玻璃纖維矽套管 / 矽套管          → FSG 系列（預設當 FSG-3 → 順博）
+ *  - 外矽內玻套管 / 外矽內玻           → SRG → 瑞普 ruipu
+ *
+ *  ⚠ PVC高壓套管 / PVC套管（CFT-3 / CFT-6）一律不計成本 → 這邊直接回 null
  ************************/
-function getSupplierFromItemCode(itemCode) {
-  if (!itemCode) return null;
-  const code = itemCode.toUpperCase();
-  if (code.includes("FSG-3") || code.includes("HST")) return "shunbo";
-  if (code.includes("FSG-2") || code.includes("SRG")) return "ruipu";
+function getSupplierFromRow(row) {
+  const codeU = (row.itemCode || "").toUpperCase();
+  const name = row.name || "";
+
+  // PVC 套管系列（CFT-3 / CFT-6），一律不計成本
+  if (
+    codeU.startsWith("CFT-3") ||
+    codeU.startsWith("CFT-6") ||
+    name.includes("PVC高壓套管") ||
+    name.includes("PVC套管")
+  ) {
+    return null;
+  }
+
+  // 1️⃣ 先用物品編號判斷
+  if (codeU.includes("FSG-3") || codeU.includes("HST")) {
+    // FSG-3 & HST → 順博
+    return "shunbo";
+  }
+  if (codeU.includes("FSG-2") || codeU.includes("SRG")) {
+    // FSG-2 & SRG → 瑞普
+    return "ruipu";
+  }
+
+  // 2️⃣ 再用品名關鍵字判斷
+
+  // 外玻內矽 → HST → 順博
+  if (name.includes("外玻內矽套管") || name.includes("外玻內矽絕緣套管")) {
+    return "shunbo";
+  }
+
+  // 外矽內玻 → SRG → 瑞普
+  if (name.includes("外矽內玻套管") || name.includes("外矽內玻")) {
+    return "ruipu";
+  }
+
+  // 玻璃纖維矽套管 / 矽套管 → FSG 系列
+  // （這裡假設預設用 FSG-3 → 順博；如果你之後有確定哪幾個是 FSG-2，再個別加特例）
+  if (name.includes("玻璃纖維矽套管") || name.includes("矽套管")) {
+    return "shunbo"; // 預設 FSG-3，用順博價格
+  }
+
   return null;
 }
+
 
 /***********************
  * 雲林電子 G5 熱縮價格（不需匯率）
@@ -114,23 +160,42 @@ function getSupplierFromItemCode(itemCode) {
  *   - 結尾 R/BL/G/Y/W → 彩色 color（含白色 W）
  *   - 其他          → 黑色 black
  ************************/
-function getYunlinUnitPrice(itemCode, specMm) {
+function getYunlinUnitPrice(itemCode, specMm, name) {
   if (!itemCode || specMm == null) return null;
   if (typeof YUNLIN_G5 === "undefined") return null;
 
   const code = itemCode.toUpperCase();
+  const text = (name || "").toString();
 
   // H + 數字 開頭 → 雲林熱縮
   if (!/^H\d+/.test(code)) return null;
 
   let colorType = "black";
 
+  // 1️⃣ 物品編號末尾的類型判斷（優先）
   if (code.endsWith("CB")) {
-    colorType = "thin"; // 超薄
+    colorType = "thin";          // 超薄
   } else if (code.endsWith("C")) {
-    colorType = "transparent"; // 透明
+    colorType = "transparent";   // 透明
   } else if (/(R|BL|G|Y|W)$/.test(code)) {
-    colorType = "color"; // 彩色（含白色 W）
+    colorType = "color";         // 彩色（含白色 W）
+  } else {
+    // 2️⃣ 再看品名文字裡有沒有顏色關鍵字
+    if (
+      text.includes("（黑") ||
+      text.includes("黑色") ||
+      text.includes("紅色") ||
+      text.includes("（紅") ||
+      text.includes("藍色") ||
+      text.includes("（藍") ||
+      text.includes("綠色") ||
+      text.includes("（綠") ||
+      text.includes("黃色") ||
+      text.includes("（黃") ||
+      /[Ww]/.test(text) // 品名裡出現 W/w 也當彩色（例如標註 White）
+    ) {
+      colorType = "color";
+    }
   }
 
   const mmKey = String(specMm);
@@ -144,6 +209,7 @@ function getYunlinUnitPrice(itemCode, specMm) {
 
   return null;
 }
+
 /***********************
  * 從 COST_MAP 取順博 / 瑞普的「每米人民幣單價」
  * 支援兩種格式：
@@ -457,23 +523,24 @@ function recalcAndRender() {
     }
 
     // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
-    const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm);
+    const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm, row.name);
     if (yunlinUnit != null) {
       unitPrice = yunlinUnit;
       cost = unitPrice * row.meters;
-    } else {
+        } else {
       // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
-      const supplierFromCode = getSupplierFromItemCode(row.itemCode);
+      const supplier = getSupplierFromRow(row);
       const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-      if (supplierFromCode && mmKey && hasRate) {
-        const basePrice = getBasePriceFromCostTable(mmKey, supplierFromCode);
+      if (supplier && mmKey && hasRate) {
+        const basePrice = getBasePriceFromCostTable(mmKey, supplier);
         if (Number.isFinite(basePrice)) {
           unitPrice = basePrice * rateVal; // 人民幣 / 米 × 匯率 → 台幣 / 米
           cost = unitPrice * row.meters;
         }
       }
     }
+
 
 
     const profit = row.amount - cost;
