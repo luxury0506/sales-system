@@ -57,8 +57,22 @@
     </section>
 
     <section class="bg-white shadow rounded-xl p-4 space-y-4">
-      <h2 class="text-sm font-semibold text-slate-700">品項毛利比較（前10名）</h2>
-      <canvas id="itemProfitChart" height="160"></canvas>
+    <h2 class="text-sm font-semibold text-slate-700">品項毛利比較</h2>
+
+    <div class="flex items-center gap-2 text-xs mb-2">
+      <label for="itemChartLimitSelect" class="text-slate-600">顯示品項數：</label>
+      <select
+        id="itemChartLimitSelect"
+        class="border rounded px-2 py-1 text-xs text-slate-700"
+      >
+        <option value="10">Top 10</option>
+        <option value="20">Top 20</option>
+        <option value="all">全部</option>
+      </select>
+    </div>
+
+    <canvas id="itemProfitChart" height="160"></canvas>
+
     </section>
   </div>
 

@@ -1,3 +1,5 @@
+let itemProfitChartInstance = null;
+
 function escapeHtml(text) {
   if (text == null) return "";
   return text
@@ -114,15 +116,33 @@ function renderTable() {
   }
 }
 
-function renderChart() {
+function renderChart(limitMode = "10") {
   const canvas = document.getElementById("itemProfitChart");
   if (!canvas || !itemSummary.length) return;
 
-  const top10 = itemSummary.slice(0, 10);
-  const labels = top10.map((p) => p.itemCode || p.name);
-  const data = top10.map((p) => Math.round(p.totalProfit));
+  let list = [];
+  if (limitMode === "all") {
+    list = itemSummary;
+  } else {
+    const n = parseInt(limitMode);
+    list = itemSummary.slice(0, n);
+  }
 
-  new Chart(canvas.getContext("2d"), {
+  const labels = list.map((p) =>
+    p.itemCode.length > 12 ? p.itemCode.slice(0, 12) + "…" : p.itemCode
+  );
+
+  const data = list.map((p) => Math.round(p.totalProfit));
+
+  const colors = data.map((v) =>
+    v >= 0 ? "#4CAF50" : "#E53935"
+  );
+
+  if (itemProfitChartInstance) {
+    itemProfitChartInstance.destroy();
+  }
+
+  itemProfitChartInstance = new Chart(canvas.getContext("2d"), {
     type: "bar",
     data: {
       labels,
@@ -130,21 +150,21 @@ function renderChart() {
         {
           label: "毛利（元）",
           data,
+          backgroundColor: colors,
         },
       ],
     },
     options: {
       responsive: true,
-      plugins: {
-        legend: { display: true },
-      },
+      plugins: { legend: { display: true } },
       scales: {
-        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 30 } },
+        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 20 } },
         y: { beginAtZero: true },
       },
     },
   });
 }
+
 
 function downloadExcel() {
   if (!itemSummary.length) return;
@@ -186,6 +206,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   itemSummary = buildItemSummary(rows);
   renderTable();
-  renderChart();
+  renderChart("10");
+
   downloadBtn.addEventListener("click", downloadExcel);
+
+  const chartSelect = document.getElementById("itemChartLimitSelect");
+  if (chartSelect) {
+    chartSelect.addEventListener("change", () => {
+      renderChart(chartSelect.value);
+    });
+  }
 });
+
