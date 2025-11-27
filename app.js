@@ -527,19 +527,44 @@ function recalcAndRender() {
     if (yunlinUnit != null) {
       unitPrice = yunlinUnit;
       cost = unitPrice * row.meters;
-        } else {
-      // 2️⃣ 順博 / 瑞普（FSG-2, FSG-3, HST, SRG，需要匯率）
-      const supplier = getSupplierFromRow(row);
-      const mmKey = row.specMm != null ? String(row.specMm) : null;
+} else {
+  // 2️⃣ 順博 / 瑞普（含顏色加價：FSG-3 +5%，HST +8%，白色不加價）
+  const supplier = getSupplierFromRow(row);
+  const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-      if (supplier && mmKey && hasRate) {
-        const basePrice = getBasePriceFromCostTable(mmKey, supplier);
-        if (Number.isFinite(basePrice)) {
-          unitPrice = basePrice * rateVal; // 人民幣 / 米 × 匯率 → 台幣 / 米
-          cost = unitPrice * row.meters;
-        }
+  if (supplier && mmKey && hasRate) {
+    let basePrice = getBasePriceFromCostTable(mmKey, supplier);
+
+    if (Number.isFinite(basePrice)) {
+      const codeUpper = (row.itemCode || "").toUpperCase();
+      const nameText = (row.name || "").toString();
+
+      // ✅ 白色（不加價）
+      const isWhite =
+        nameText.includes("白") ||
+        /W$/.test(codeUpper);
+
+      // ✅ 彩色（不含白色、透明不列入）
+      const isColor =
+        !isWhite &&
+        /(黑|紅|藍|綠|黃)/.test(nameText) ||
+        /(R|BL|G|Y)$/.test(codeUpper);
+
+      // ✅ FSG-3 彩色 +5%
+      if (supplier === "shunbo" && codeUpper.includes("FSG-3") && isColor) {
+        basePrice *= 1.05;
       }
+
+      // ✅ HST 彩色 +8%
+      if (supplier === "shunbo" && codeUpper.includes("HST") && isColor) {
+        basePrice *= 1.08;
+      }
+
+      unitPrice = basePrice * rateVal; // 台幣 / 米
+      cost = unitPrice * row.meters;
     }
+  }
+}
 
 
 
