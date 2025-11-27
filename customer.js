@@ -115,15 +115,33 @@ function renderTable() {
   }
 }
 
-function renderChart() {
+function renderChart(limitMode = "10") {
   const canvas = document.getElementById("profitChart");
   if (!canvas || !customerSummary.length) return;
 
-  const top10 = customerSummary.slice(0, 10);
-  const labels = top10.map((c) => c.customer);
-  const data = top10.map((c) => Math.round(c.totalProfit));
+  // 依下拉選單決定顯示筆數
+  let list = [];
+  if (limitMode === "all") {
+    list = customerSummary;
+  } else {
+    const n = parseInt(limitMode);
+    list = customerSummary.slice(0, n);
+  }
 
-  new Chart(canvas.getContext("2d"), {
+  // 避免長名稱擠在一起 → 自動縮短
+  const labels = list.map((c) =>
+    c.customer.length > 12 ? c.customer.slice(0, 12) + "…" : c.customer
+  );
+
+  // 毛利資料
+  const data = list.map((c) => Math.round(c.totalProfit));
+
+  // 若已有舊圖 → 先清除
+  if (profitChartInstance) {
+    profitChartInstance.destroy();
+  }
+
+  profitChartInstance = new Chart(canvas.getContext("2d"), {
     type: "bar",
     data: {
       labels,
@@ -131,16 +149,17 @@ function renderChart() {
         {
           label: "毛利（元）",
           data,
+          backgroundColor: data.map((v) =>
+            v >= 0 ? "#4CAF50" : "#E53935" // 盈利=綠，虧損=紅
+          ),
         },
       ],
     },
     options: {
       responsive: true,
-      plugins: {
-        legend: { display: true },
-      },
+      plugins: { legend: { display: true } },
       scales: {
-        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 30 } },
+        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 20 } },
         y: { beginAtZero: true },
       },
     },
@@ -174,7 +193,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   customerSummary = buildCustomerSummary(rows);
   renderTable();
-  renderChart();
+  renderChart("10"); // 預設 Top10
 
+  // 綁定匯出
   downloadBtn.addEventListener("click", downloadExcel);
+
+  // 綁定下拉選單切換圖表
+  const chartSelect = document.getElementById("chartLimitSelect");
+  if (chartSelect) {
+    chartSelect.addEventListener("change", () => {
+      renderChart(chartSelect.value);
+    });
+  }
 });
+
+
+let profitChartInstance = null;
+
