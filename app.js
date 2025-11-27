@@ -553,10 +553,10 @@ function recalcAndRender() {
     };
   });
 
-  // ❌ 排除不需要列出的品項 Z043 / Z044
+  // ❌ 排除不需要列出的品項 Z043 / Z044 / A1
   processedRows = processedRows.filter((row) => {
     const code = (row.itemCode || "").toUpperCase();
-    return !code.startsWith("Z043") && !code.startsWith("Z044");
+    return !code.startsWith("Z043") && !code.startsWith("Z044") && !code.startsWith("A1");
   });
 
   // ✅ 儲存到 localStorage，給其他頁面用
