@@ -103,6 +103,63 @@
             清除分析資料
           </button>
         </div>
+        <!-- PVC 成本利潤計算（直接在主頁） -->
+        <section class="bg-white shadow rounded-xl p-5 space-y-3 mt-4">
+          <h2 class="text-sm font-semibold text-slate-700">
+            🧮 PVC 成本利潤計算 ＋ 儲存
+          </h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div>
+              <label class="block text-slate-700 mb-1">每米重 (g/M)</label>
+              <input id="pvcWeightPerM" type="number" step="0.001"
+                    class="w-full border rounded px-2 py-1 text-sm" placeholder="例如：26.745">
+            </div>
+            <div>
+              <label class="block text-slate-700 mb-1">廢料 (%)</label>
+              <input id="pvcWastePercent" type="number" step="0.1" value="50"
+                    class="w-full border rounded px-2 py-1 text-sm">
+            </div>
+            <div>
+              <label class="block text-slate-700 mb-1">PVC 粒 (元/Kg)</label>
+              <input id="pvcPelletPrice" type="number" step="0.001" value="90"
+                    class="w-full border rounded px-2 py-1 text-sm">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mt-2">
+            <div>
+              <label class="block text-slate-700 mb-1">利潤 (%)</label>
+              <input id="pvcProfitPercent" type="number" step="0.1" value="80"
+                    class="w-full border rounded px-2 py-1 text-sm">
+            </div>
+            <div>
+              <label class="block text-slate-700 mb-1">系列</label>
+              <select id="pvcSeries" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="CFT-3">CFT-3（CFT-300）</option>
+                <option value="CFT-6">CFT-6（CFT-600）</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-700 mb-1">規格內徑 (mm)</label>
+              <input id="pvcSpecMm" type="number" step="0.001"
+                    class="w-full border rounded px-2 py-1 text-sm" placeholder="例如：8.380">
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 mt-3 text-sm">
+            <button id="pvcCalcSaveBtn"
+                    class="px-3 py-1.5 rounded text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600">
+              計算並儲存 PVC 成本
+            </button>
+            <div id="pvcCalcStatus" class="text-xs text-slate-600"></div>
+          </div>
+
+          <p class="text-xs text-slate-500 mt-1">
+            公式：每米成本 = 每米重(g/M) ÷ 1000 × PVC粒(元/Kg) × (1 + 廢料%)；售價 = 成本 × (1 + 利潤%)。<br>
+            儲存時，系統只會把「每米成本」存進 PVC 成本表，用來計算 CFT-3 / CFT-6 的銷貨成本（不吃匯率）。
+          </p>
+        </section>
 
         <p class="mt-1 text-xs text-slate-500">
           銷貨成本公式：<b>成本 = 銷貨米數 × 每米單價 × 匯率</b>（每米單價來自 cost-data.js，PVC 例外由 PVC 成本表提供且不吃匯率）。<br>
