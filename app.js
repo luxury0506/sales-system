@@ -49,9 +49,12 @@ function formatQtyInt(v) {
 function extractMmInfo(name) {
   if (!name) return { specMm: null, cutMm: null };
 
+  let specMm = null;
+  let cutMm = null;
+
+  // ① 先抓「xx mm」
   const mmRegex = /([\d\.]+)\s*mm/gi;
   let mmMatch = mmRegex.exec(name);
-  let specMm = null;
 
   if (mmMatch) {
     const v = parseFloat(mmMatch[1]);
@@ -60,9 +63,7 @@ function extractMmInfo(name) {
     }
   }
 
-  // 裁切長度
-  let cutMm = null;
-
+  // 裁切長度：  e.g. "2.0mm * 180mm" 或 "2.0mm x 180mm"
   let m = /mm\s*[x*]\s*(\d+(?:\.\d+)?)/i.exec(name);
   if (m) {
     const v = parseFloat(m[1]);
@@ -79,8 +80,22 @@ function extractMmInfo(name) {
     }
   }
 
+  // ② 如果沒有寫 mm，但有 "3/8AWG"、"7/16AWG" 這類字樣，就把英吋換算成 mm
+  if (specMm == null) {
+    const awgMatch = /(\d+)\s*\/\s*(\d+)\s*AWG/i.exec(name);
+    if (awgMatch) {
+      const num = parseFloat(awgMatch[1]);
+      const den = parseFloat(awgMatch[2]);
+      if (Number.isFinite(num) && Number.isFinite(den) && den > 0) {
+        // 1 inch = 25.4 mm
+        specMm = (25.4 * num) / den;
+      }
+    }
+  }
+
   return { specMm, cutMm };
 }
+
 
 /***********************
  * 判斷供應商（順博 / 瑞普，需匯率）
@@ -503,24 +518,20 @@ function handleSalesFile(e) {
   reader.readAsArrayBuffer(file);
 }
 
-// ========= PVC 成本利潤計算（在 index 上用） =========
+// ========= PVC 成本計算（在 index 上用） =========
 
 const pvcWeightPerMInput = document.getElementById("pvcWeightPerM");
 const pvcWastePercentInput = document.getElementById("pvcWastePercent");
 const pvcPelletPriceInput = document.getElementById("pvcPelletPrice");
-const pvcProfitPercentInput = document.getElementById("pvcProfitPercent");
 const pvcSeriesSelect = document.getElementById("pvcSeries");
 const pvcSpecMmInput = document.getElementById("pvcSpecMm");
 const pvcCalcSaveBtn = document.getElementById("pvcCalcSaveBtn");
 const pvcCalcStatus = document.getElementById("pvcCalcStatus");
 
-// 這裡沿用你原本讀進來的 PVC_COST_CFT3 / PVC_COST_CFT6
-// 如果一開始還沒呼叫 loadPvcCostFromLocalStorage，就先呼叫一次
-if (typeof loadPvcCostFromLocalStorage === "function") {
-  loadPvcCostFromLocalStorage();
-}
+const pvcLastInfo = document.getElementById("pvcLastInfo");
+const pvcSavedList = document.getElementById("pvcSavedList");
 
-// 把目前 PVC 成本寫回 localStorage，維持原本結構
+// 把 PVC 成本寫回 localStorage
 function savePvcCostToLocalStorage() {
   try {
     const payload = {
@@ -534,13 +545,54 @@ function savePvcCostToLocalStorage() {
   }
 }
 
+// 把所有已儲存的 PVC 成本列出來
+function renderPvcSummary() {
+  if (!pvcSavedList) return;
+
+  const lines = [];
+
+  const keys3 = Object.keys(PVC_COST_CFT3 || {}).sort(
+    (a, b) => parseFloat(a) - parseFloat(b)
+  );
+  const keys6 = Object.keys(PVC_COST_CFT6 || {}).sort(
+    (a, b) => parseFloat(a) - parseFloat(b)
+  );
+
+  if (!keys3.length && !keys6.length) {
+    pvcSavedList.textContent = "尚未儲存任何 PVC 成本。";
+    return;
+  }
+
+  if (keys3.length) {
+    const part = keys3
+      .map((k) => `內徑 ${k} mm → ${PVC_COST_CFT3[k].toFixed(4)} 元/M`)
+      .join("；");
+    lines.push(`CFT-3：${part}`);
+  }
+
+  if (keys6.length) {
+    const part = keys6
+      .map((k) => `內徑 ${k} mm → ${PVC_COST_CFT6[k].toFixed(4)} 元/M`)
+      .join("；");
+    lines.push(`CFT-6：${part}`);
+  }
+
+  pvcSavedList.innerHTML = lines.join("<br>");
+}
+
+// 只有在 index.html 上才會找到這些元素
 if (pvcCalcSaveBtn) {
+  // 先讀一次舊資料
+  if (typeof loadPvcCostFromLocalStorage === "function") {
+    loadPvcCostFromLocalStorage();
+  }
+  renderPvcSummary();
+
   pvcCalcSaveBtn.addEventListener("click", () => {
     const weightPerM = parseFloat(pvcWeightPerMInput.value); // g/M
     const wastePercent = parseFloat(pvcWastePercentInput.value) || 0;
     const pelletPrice = parseFloat(pvcPelletPriceInput.value);
-    const profitPercent = parseFloat(pvcProfitPercentInput.value) || 0;
-    const series = pvcSeriesSelect.value; // CFT-3 / CFT-6
+    const series = pvcSeriesSelect.value; // "CFT-3" / "CFT-6"
     const specMm = parseFloat(pvcSpecMmInput.value);
 
     if (!Number.isFinite(weightPerM) || weightPerM <= 0) {
@@ -557,17 +609,13 @@ if (pvcCalcSaveBtn) {
     }
 
     const wasteRate = wastePercent / 100;
-    const profitRate = profitPercent / 100;
 
     // 每米重量 Kg
     const weightKgPerM = weightPerM / 1000;
 
-    // 成本 = 重量 × PVC粒 × (1 + 廢料%)
+    // ✅ 成本(元/M) = 重量(Kg/M) × PVC粒(元/Kg) × (1 + 廢料%)
     const materialPricePerKg = pelletPrice * (1 + wasteRate);
     const costPerM = weightKgPerM * materialPricePerKg;
-
-    // 售價（只是顯示給你看，真正存起來的是成本）
-    const pricePerM = costPerM * (1 + profitRate);
 
     const key = specMm.toFixed(3); // 內徑 mm 當 key
 
@@ -578,12 +626,17 @@ if (pvcCalcSaveBtn) {
     }
 
     savePvcCostToLocalStorage();
+    renderPvcSummary();
 
-    pvcCalcStatus.textContent =
-      `已儲存 ${series} 規格 ${key} mm；成本 ${costPerM.toFixed(4)} 元/M，售價約 ${pricePerM.toFixed(4)} 元/M。` +
-      " 下次上傳銷貨檔時會自動套用這個成本。";
+    if (pvcLastInfo) {
+      pvcLastInfo.textContent =
+        `本次：${series} 內徑 ${key} mm → 每米成本 ${costPerM.toFixed(4)} 元/M。`;
+    }
+
+    pvcCalcStatus.textContent = "PVC 成本已計算並儲存。";
   });
 }
+
 
 /***********************
  * 主計算：
