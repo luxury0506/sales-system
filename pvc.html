@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>PVC 成本設定</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 16px 0 8px;
+    }
+    .card {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #fafafa;
+    }
+    .hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .ok { color: #0a7c27; }
+    .error { color: #c0392b; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 4px 6px;
+      font-size: 13px;
+      text-align: right;
+    }
+    th {
+      background: #e8f0ff;
+      text-align: center;
+    }
+    .label-cell {
+      background: #e0e0e0;
+      text-align: left;
+      font-weight: bold;
+      color: #003366;
+    }
+    .unit-cell {
+      background: #f5f5f5;
+      text-align: left;
+      font-size: 12px;
+      color: #555;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 2px 4px;
+      font-size: 13px;
+    }
+    input[readonly] {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+    }
+    button {
+      margin-top: 6px;
+      padding: 4px 8px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 4px;
+      border: 1px solid #999;
+      background: #f0f0f0;
+    }
+    button:hover {
+      background: #e2e2e2;
+    }
+    .top-links {
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .top-links a {
+      margin-right: 8px;
+      text-decoration: none;
+      color: #3366cc;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-links">
+    <a href="index.html">← 回主頁（銷貨分析）</a>
+  </div>
+
+  <h1>PVC 管重量與成本設定</h1>
+
+  <!-- PVC 管重量計算表 -->
+  <div class="card">
+    <h2>PVC 管重量計算表</h2>
+    <table>
+      <tbody>
+        <tr>
+          <td class="label-cell">內徑 (mm)</td>
+          <td><input id="innerDiameter" type="number" step="0.001" placeholder="例如：8.380" /></td>
+          <td class="unit-cell">半徑</td>
+          <td><input id="innerRadius" type="number" step="0.0001" readonly /></td>
+        </tr>
+        <tr>
+          <td class="label-cell">內圓面積</td>
+          <td><input id="innerArea" type="number" step="0.001" readonly /></td>
+          <td class="unit-cell">mm²</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="label-cell">厚度 (mm)</td>
+          <td><input id="thickness" type="number" step="0.01" placeholder="例如：0.60" /></td>
+          <td class="unit-cell">外徑 (mm)</td>
+          <td><input id="outerDiameter" type="number" step="0.001" readonly /></td>
+        </tr>
+        <tr>
+          <td class="label-cell">外圓面積</td>
+          <td><input id="outerArea" type="number" step="0.001" readonly /></td>
+          <td class="unit-cell">mm²</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="label-cell">比重</td>
+          <td><input id="density" type="number" step="0.001" value="1.580" /></td>
+          <td class="unit-cell">g/cm³</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="label-cell">每米重</td>
+          <td><input id="weightPerM" type="number" step="0.001" readonly /></td>
+          <td class="unit-cell">g/M</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <button id="calcWeightBtn">計算管重量</button>
+    <div id="weightStatus" class="hint"></div>
+  </div>
+
+  <!-- PVC 成本利潤計算 -->
+  <div class="card">
+    <h2>PVC 成本利潤計算</h2>
+    <table>
+      <tbody>
+        <tr>
+          <td class="label-cell">305 米重</td>
+          <td><input id="weight305" type="number" step="0.001" readonly /></td>
+          <td class="unit-cell">Kg</td>
+          <td class="label-cell">100 米重</td>
+          <td><input id="weight100" type="number" step="0.001" readonly /></td>
+          <td class="unit-cell">Kg</td>
+        </tr>
+        <tr>
+          <td class="label-cell">廢料 (%)</td>
+          <td><input id="wastePercent" type="number" step="0.1" value="50" /></td>
+          <td class="unit-cell">%</td>
+          <td class="label-cell">PVC 粒 (元/Kg)</td>
+          <td><input id="pelletPrice" type="number" step="0.001" value="90" /></td>
+          <td class="unit-cell">元/Kg</td>
+        </tr>
+        <tr>
+          <td class="label-cell">PVC 成本</td>
+          <td><input id="costPerM" type="number" step="0.0001" readonly /></td>
+          <td class="unit-cell">元/M</td>
+          <td class="label-cell">利潤 %</td>
+          <td><input id="profitPercent" type="number" step="0.1" value="80" /></td>
+          <td class="unit-cell">%</td>
+        </tr>
+        <tr>
+          <td class="label-cell">售價</td>
+          <td><input id="pricePerM" type="number" step="0.0001" readonly /></td>
+          <td class="unit-cell">元/M</td>
+          <td></td><td></td><td></td>
+        </tr>
+      </tbody>
+    </table>
+    <button id="calcCostBtn">計算成本與售價</button>
+    <div id="costStatus" class="hint"></div>
+  </div>
+
+  <!-- 儲存到 PVC 成本表 -->
+  <div class="card">
+    <h2>將本規格儲存為 PVC 成本</h2>
+    <p class="hint">
+      會將「成本 元/M」存進系統，供主頁面依照 CFT-3 / CFT-6 計算銷貨成本（不吃匯率）。
+    </p>
+    <label>
+      系列：
+      <select id="seriesSelect">
+        <option value="CFT-3">CFT-3（對應 CFT-300）</option>
+        <option value="CFT-6">CFT-6（對應 CFT-600）</option>
+      </select>
+    </label>
+    <label>
+      規格（內徑 mm，會當作鍵值）：
+      <input id="specForSave" type="number" step="0.001" placeholder="預設會帶入上面輸入的內徑" />
+    </label>
+    <button id="saveCurrentPvcBtn">儲存本規格成本</button>
+    <div id="saveStatus" class="hint"></div>
+  </div>
+
+  <!-- 已儲存 PVC 成本 -->
+  <div class="card">
+    <h2>目前已儲存的 PVC 成本（節錄）</h2>
+    <p id="savedInfo" class="hint"></p>
+
+    <h3>CFT-3（CFT-300 對應）</h3>
+    <table>
+      <thead>
+        <tr><th>規格 (mm)</th><th>每米成本 (元)</th></tr>
+      </thead>
+      <tbody id="tableCft3"></tbody>
+    </table>
+
+    <h3 style="margin-top:16px;">CFT-6（CFT-600 對應）</h3>
+    <table>
+      <thead>
+        <tr><th>規格 (mm)</th><th>每米成本 (元)</th></tr>
+      </thead>
+      <tbody id="tableCft6"></tbody>
+    </table>
+  </div>
+
+  <script src="pvc.js"></script>
+</body>
+</html>

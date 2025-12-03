@@ -24,34 +24,43 @@
     </header>
 
     <!-- 上方導航標籤 -->
-<div class="flex items-center justify-between mb-4">
-  <div>
-    <h1 class="text-2xl font-bold text-slate-800">每日銷貨換算與毛利試算</h1>
-    <p class="text-sm text-slate-600 mt-1">
-      上傳每日銷貨明細，系統自動換算米數、成本與毛利，並將結果提供給其他分析頁面使用。
-    </p>
-  </div>
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">每日銷貨換算與毛利試算</h1>
+        <p class="text-sm text-slate-600 mt-1">
+          上傳每日銷貨明細，系統自動換算米數、成本與毛利，並將結果提供給其他分析頁面使用。
+        </p>
+      </div>
 
-  <div class="flex gap-2">
-    <!-- 連到客戶統計頁 -->
-    <a
-      href="customer.html"
-      class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-             bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-    >
-      📊 客戶別統計
-    </a>
+      <div class="flex gap-2">
+        <!-- 連到客戶統計頁 -->
+        <a
+          href="customer.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          📊 客戶別統計
+        </a>
 
-    <!-- 連到進貨成本比較頁 -->
-    <a
-      href="cost.html"
-      class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-             bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-    >
-      💹 進貨成本比較
-    </a>
-  </div>
-</div>
+        <!-- 連到進貨成本比較頁 -->
+        <a
+          href="cost.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          💹 進貨成本比較
+        </a>
+
+        <!-- 新增：連到 PVC 成本設定頁 -->
+        <a
+          href="pvc.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          🧮 PVC 成本設定
+        </a>
+      </div>
+    </div>
 
     <!-- 上傳與匯率設定 -->
     <section class="bg-white shadow rounded-xl p-5 space-y-4">
@@ -87,7 +96,6 @@
             套用匯率重新計算
           </button>
 
-          <!-- ⭐ 新增這顆 -->
           <button
             id="clearDataBtn"
             class="px-3 py-1.5 rounded text-xs font-medium bg-slate-200 text-slate-700 hover:bg-slate-300"
@@ -96,9 +104,8 @@
           </button>
         </div>
 
-
         <p class="mt-1 text-xs text-slate-500">
-          銷貨成本公式：<b>成本 = 銷貨米數 × 每米單價 × 匯率</b>（每米單價來自 cost-data.js）。<br>
+          銷貨成本公式：<b>成本 = 銷貨米數 × 每米單價 × 匯率</b>（每米單價來自 cost-data.js，PVC 例外由 PVC 成本表提供且不吃匯率）。<br>
           銷貨毛利：<b>銷貨金額 − 銷貨成本</b>。
         </p>
       </div>
@@ -106,8 +113,6 @@
       <div id="status" class="text-sm text-slate-700 mt-1"></div>
     </section>
 
-    
-    
     <!-- 匯出按鈕 -->
     <div class="flex items-center justify-between">
       <button
@@ -143,10 +148,9 @@
     </section>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="cost-data.js"></script>
-<script src="app.js"></script>
-
-
+  <!-- SheetJS, 成本表, 主程式 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="cost-data.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

@@ -45,16 +45,10 @@ function formatQtyInt(v) {
 
 /***********************
  * 從品名抓 mm 規格與裁切長度
- *
- * 規則：
- *  - 先抓第一個出現的「xx mm」當規格 specMm
- *  - 只有在有「*」或「x」時，才抓後面的數字當裁切長度 cutMm
- *  - 若找不到裁切長度 → 視為「銷貨量單位就是米」
  ************************/
 function extractMmInfo(name) {
   if (!name) return { specMm: null, cutMm: null };
 
-  // 1. 抓「有 mm 的數字」當規格
   const mmRegex = /([\d\.]+)\s*mm/gi;
   let mmMatch = mmRegex.exec(name);
   let specMm = null;
@@ -66,10 +60,9 @@ function extractMmInfo(name) {
     }
   }
 
-  // 2. 尋找裁切長度：只接受有 * 或 x 的情況
+  // 裁切長度
   let cutMm = null;
 
-  // 2-1 形式："...mm * 85" 或 "...mm x 85"
   let m = /mm\s*[x*]\s*(\d+(?:\.\d+)?)/i.exec(name);
   if (m) {
     const v = parseFloat(m[1]);
@@ -77,7 +70,6 @@ function extractMmInfo(name) {
       cutMm = v;
     }
   } else {
-    // 2-2 形式："* 180mm" 或 "x180mm"
     m = /[x*]\s*(\d+(?:\.\d+)?)(?=\s*mm\b)/i.exec(name);
     if (m) {
       const v = parseFloat(m[1]);
@@ -92,23 +84,12 @@ function extractMmInfo(name) {
 
 /***********************
  * 判斷供應商（順博 / 瑞普，需匯率）
- *
- * 優先順序：
- *  1) 先看物品編號包含 FSG-2 / FSG-3 / HST / SRG
- *  2) 如果物品編號看不出來，再用「品名關鍵字」判斷
- *
- * 規則（你提供的對應）：
- *  - 外玻內矽套管 / 外玻內矽絕緣套管 → HST → 順博 shunbo
- *  - 玻璃纖維矽套管 / 矽套管          → FSG 系列（預設當 FSG-3 → 順博）
- *  - 外矽內玻套管 / 外矽內玻           → SRG → 瑞普 ruipu
- *
- *  ⚠ PVC高壓套管 / PVC套管（CFT-3 / CFT-6）一律不計成本 → 這邊直接回 null
  ************************/
 function getSupplierFromRow(row) {
   const codeU = (row.itemCode || "").toUpperCase();
   const name = row.name || "";
 
-  // PVC 套管系列（CFT-3 / CFT-6），一律不計成本
+  // PVC 套管系列 -> 在 PVC 成本處理，不在這裡判斷供應商
   if (
     codeU.startsWith("CFT-3") ||
     codeU.startsWith("CFT-6") ||
@@ -118,47 +99,32 @@ function getSupplierFromRow(row) {
     return null;
   }
 
-  // 1️⃣ 先用物品編號判斷
+  // 物品編號
   if (codeU.includes("FSG-3") || codeU.includes("HST")) {
-    // FSG-3 & HST → 順博
     return "shunbo";
   }
   if (codeU.includes("FSG-2") || codeU.includes("SRG")) {
-    // FSG-2 & SRG → 瑞普
     return "ruipu";
   }
 
-  // 2️⃣ 再用品名關鍵字判斷
-
-  // 外玻內矽 → HST → 順博
+  // 品名關鍵字
   if (name.includes("外玻內矽套管") || name.includes("外玻內矽絕緣套管")) {
     return "shunbo";
   }
 
-  // 外矽內玻 → SRG → 瑞普
   if (name.includes("外矽內玻套管") || name.includes("外矽內玻")) {
     return "ruipu";
   }
 
-  // 玻璃纖維矽套管 / 矽套管 → FSG 系列
-  // （這裡假設預設用 FSG-3 → 順博；如果你之後有確定哪幾個是 FSG-2，再個別加特例）
   if (name.includes("玻璃纖維矽套管") || name.includes("矽套管")) {
-    return "shunbo"; // 預設 FSG-3，用順博價格
+    return "shunbo"; // 預設 FSG-3
   }
 
   return null;
 }
 
-
 /***********************
  * 雲林電子 G5 熱縮價格（不需匯率）
- *
- * 規則：
- *   - H + 數字 開頭 → 雲林熱縮（H01, H015, H02, H035-085W...）
- *   - 結尾 CB       → 超薄 thin
- *   - 結尾 C        → 透明 transparent
- *   - 結尾 R/BL/G/Y/W → 彩色 color（含白色 W）
- *   - 其他          → 黑色 black
  ************************/
 function getYunlinUnitPrice(itemCode, specMm, name) {
   if (!itemCode || specMm == null) return null;
@@ -167,20 +133,17 @@ function getYunlinUnitPrice(itemCode, specMm, name) {
   const code = itemCode.toUpperCase();
   const text = (name || "").toString();
 
-  // H + 數字 開頭 → 雲林熱縮
   if (!/^H\d+/.test(code)) return null;
 
   let colorType = "black";
 
-  // 1️⃣ 物品編號末尾的類型判斷（優先）
   if (code.endsWith("CB")) {
-    colorType = "thin";          // 超薄
+    colorType = "thin";
   } else if (code.endsWith("C")) {
-    colorType = "transparent";   // 透明
+    colorType = "transparent";
   } else if (/(R|BL|G|Y|W)$/.test(code)) {
-    colorType = "color";         // 彩色（含白色 W）
+    colorType = "color";
   } else {
-    // 2️⃣ 再看品名文字裡有沒有顏色關鍵字
     if (
       text.includes("（黑") ||
       text.includes("黑色") ||
@@ -192,7 +155,7 @@ function getYunlinUnitPrice(itemCode, specMm, name) {
       text.includes("（綠") ||
       text.includes("黃色") ||
       text.includes("（黃") ||
-      /[Ww]/.test(text) // 品名裡出現 W/w 也當彩色（例如標註 White）
+      /[Ww]/.test(text)
     ) {
       colorType = "color";
     }
@@ -212,9 +175,6 @@ function getYunlinUnitPrice(itemCode, specMm, name) {
 
 /***********************
  * 從 COST_MAP 取順博 / 瑞普的「每米人民幣單價」
- * 支援兩種格式：
- *  - Map：      new Map([[ "shunbo|3.0", 0.12 ], ...])
- *  - 一般物件： { "shunbo|3.0": 0.12, "3.0": 0.12, ... }
  ************************/
 function getBasePriceFromCostTable(mmKey, supplier) {
   const raw = window.COST_MAP;
@@ -224,20 +184,17 @@ function getBasePriceFromCostTable(mmKey, supplier) {
   const mmFloat = parseFloat(mmKey);
   const candidates = [];
 
-  // 有供應商資訊就先試 supplier|mm
   if (supplier) {
     candidates.push(`${supplier}|${mmStr}`);
     if (!Number.isNaN(mmFloat)) {
       candidates.push(`${supplier}|${mmFloat}`);
     }
   }
-  // 再退而求其次只用 mm 當 key
   candidates.push(mmStr);
   if (!Number.isNaN(mmFloat)) {
     candidates.push(String(mmFloat));
   }
 
-  // 1) COST_MAP 是 Map
   if (raw instanceof Map) {
     for (const k of candidates) {
       if (raw.has(k)) {
@@ -245,9 +202,7 @@ function getBasePriceFromCostTable(mmKey, supplier) {
         if (Number.isFinite(val)) return val;
       }
     }
-  }
-  // 2) COST_MAP 是一般物件
-  else if (typeof raw === "object") {
+  } else if (typeof raw === "object") {
     for (const k of candidates) {
       if (Object.prototype.hasOwnProperty.call(raw, k)) {
         const val = raw[k];
@@ -257,6 +212,73 @@ function getBasePriceFromCostTable(mmKey, supplier) {
   }
 
   return null;
+}
+
+/***********************
+ * PVC 成本（不吃匯率），由 pvc.html 設定
+ * localStorage 結構：
+ * {
+ *   cft3: { "8.380": 單價元/M, ... },
+ *   cft6: { "10.000": 單價元/M, ... },
+ *   updatedAt: ISOString
+ * }
+ ************************/
+const PVC_STORAGE_KEY = "PVC_COST_TABLE";
+let PVC_COST_CFT3 = {};
+let PVC_COST_CFT6 = {};
+
+function loadPvcCostFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(PVC_STORAGE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    PVC_COST_CFT3 = obj.cft3 || {};
+    PVC_COST_CFT6 = obj.cft6 || {};
+  } catch (e) {
+    console.error("讀取 PVC 成本失敗：", e);
+  }
+}
+
+/**
+ * 根據物品編號 + 規格(mm) 取得 PVC 每米成本（元/M，不吃匯率）
+ */
+function getPvcUnitPrice(itemCode, specMm, name) {
+  const codeUpper = (itemCode || "").toUpperCase();
+  const text = (name || "").toString();
+  const d = specMm != null ? parseFloat(specMm) : NaN;
+  if (!Number.isFinite(d)) return null;
+
+  let table = null;
+
+  if (codeUpper.startsWith("CFT-3")) {
+    table = PVC_COST_CFT3;
+  } else if (codeUpper.startsWith("CFT-6")) {
+    table = PVC_COST_CFT6;
+  } else if (text.includes("PVC高壓套管") || text.includes("PVC套管")) {
+    // 若之後有其它 PVC 物品編號格式，再補判斷；目前先限制 CFT-3/6
+    return null;
+  } else {
+    return null;
+  }
+
+  const keys = Object.keys(table);
+  if (!keys.length) return null;
+
+  let bestKey = null;
+  let bestDiff = Infinity;
+  for (const k of keys) {
+    const v = parseFloat(k);
+    if (!Number.isFinite(v)) continue;
+    const diff = Math.abs(v - d);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestKey = k;
+    }
+  }
+
+  if (!bestKey) return null;
+  const unit = table[bestKey];
+  return Number.isFinite(unit) ? unit : null;
 }
 
 /***********************
@@ -274,15 +296,17 @@ const clearDataBtn = document.getElementById("clearDataBtn");
 /***********************
  * 全域資料
  ************************/
-let baseRows = [];      // 原始每筆銷貨（含客戶、品名、米數…）
-let processedRows = []; // 加上成本、毛利後的資料
+let baseRows = [];
+let processedRows = [];
 
-// 順博 / 瑞普 成本表，從 cost-data.js 來
+// 順博 / 瑞普 成本表
 const costMap = window.COST_MAP || new Map();
+
+// 一載入就讀 PVC 成本
+loadPvcCostFromLocalStorage();
 
 /***********************
  * 將分析完的資料存到 localStorage
- * 給 customer.html / cost.html 使用
  ************************/
 function saveToLocalStorage() {
   try {
@@ -409,40 +433,32 @@ function handleSalesFile(e) {
         const row = rows[r];
         if (!row) continue;
 
-        // 解析客戶名稱列，例如：
-        // 1) "客戶名稱:(CH049)世僖"
-        // 2) "客戶名稱: (TC107)台中某公司"
-        // 3) "客戶名稱:TC105"
-        // 4) "客戶名稱: TC105 台中某公司"
         const firstCell = safeCell(row[0]);
         const customerLineMatch = firstCell.match(/^客戶名稱[:：]\s*(.+)$/);
         if (customerLineMatch) {
-          const body = customerLineMatch[1].trim(); // 拿掉「客戶名稱:」
+          const body = customerLineMatch[1].trim();
 
           let code = "";
           let name = "";
 
-          // 情況一："(CH049)世僖"
           let mParen = body.match(/^\(([^)]+)\)\s*(.*)$/);
           if (mParen) {
-            code = mParen[1].trim();        // CH049
-            name = mParen[2].trim();        // 世僖
+            code = mParen[1].trim();
+            name = mParen[2].trim();
           } else {
-            // 情況二："TC105 台中某公司" 或 "TC105"
             let mCodeName = body.match(/^([A-Za-z0-9]+)\s*(.*)$/);
             if (mCodeName) {
-              code = mCodeName[1].trim();   // TC105
-              name = mCodeName[2].trim();   // 台中某公司 (可能為空字串)
+              code = mCodeName[1].trim();
+              name = mCodeName[2].trim();
             } else {
-              // 其它奇怪格式，就整串當成名稱
               code = body;
               name = "";
             }
           }
 
-          const full = name ? `${code} ${name}` : code; // 有名字就 "代碼 名稱"，沒有就單純代碼
+          const full = name ? `${code} ${name}` : code;
           currentCustomer = full;
-          continue; // 這一列只用來設定客戶，不是銷貨資料
+          continue;
         }
 
         const itemCode =
@@ -488,7 +504,10 @@ function handleSalesFile(e) {
 }
 
 /***********************
- * 主計算：雲林(不套匯率) + 順博/瑞普(要匯率) + CFT-3/6 不計成本
+ * 主計算：
+ *  0) PVC 成本（CFT-3 / CFT-6，不吃匯率，來自 PVC_STORAGE）
+ *  1) 雲林熱縮（不吃匯率）
+ *  2) 順博 / 瑞普（吃匯率，含顏色加價）
  ************************/
 function recalcAndRender() {
   if (!baseRows.length) {
@@ -502,71 +521,65 @@ function recalcAndRender() {
 
   if (!hasRate) {
     statusEl.textContent =
-      "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮不受影響）。";
+      "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮與 PVC 不受影響）。";
   }
 
   processedRows = baseRows.map((row) => {
-    let unitPrice = 0; // 台幣 / 米
+    let unitPrice = 0;
     let cost = 0;
 
     const codeUpper = (row.itemCode || "").toUpperCase();
+    const nameText = (row.name || "").toString();
 
-    // ⭐ CFT-3 / CFT-6 一律不計成本
-    if (codeUpper.startsWith("CFT-3") || codeUpper.startsWith("CFT-6")) {
-      const profit = row.amount; // 成本=0 → 毛利=銷售額
-      return {
-        ...row,
-        unitPrice: 0,
-        cost: 0,
-        profit,
-      };
-    }
-
-    // 1️⃣ 雲林電子熱縮（Hxx 開頭，不需匯率）
-    const yunlinUnit = getYunlinUnitPrice(row.itemCode, row.specMm, row.name);
-    if (yunlinUnit != null) {
-      unitPrice = yunlinUnit;
+    // 0️⃣ 先試 PVC 成本（CFT-3 / CFT-6）
+    const pvcUnit = getPvcUnitPrice(row.itemCode, row.specMm, row.name);
+    if (pvcUnit != null) {
+      unitPrice = pvcUnit;           // 元 / 米（不吃匯率）
       cost = unitPrice * row.meters;
-} else {
-  // 2️⃣ 順博 / 瑞普（含顏色加價：FSG-3 +5%，HST +8%，白色不加價）
-  const supplier = getSupplierFromRow(row);
-  const mmKey = row.specMm != null ? String(row.specMm) : null;
+    } else {
+      // 1️⃣ 雲林熱縮（Hxx，不吃匯率）
+      const yunlinUnit = getYunlinUnitPrice(
+        row.itemCode,
+        row.specMm,
+        row.name
+      );
+      if (yunlinUnit != null) {
+        unitPrice = yunlinUnit;
+        cost = unitPrice * row.meters;
+      } else {
+        // 2️⃣ 順博 / 瑞普（吃匯率）
+        const supplier = getSupplierFromRow(row);
+        const mmKey = row.specMm != null ? String(row.specMm) : null;
 
-  if (supplier && mmKey && hasRate) {
-    let basePrice = getBasePriceFromCostTable(mmKey, supplier);
+        if (supplier && mmKey && hasRate) {
+          let basePrice = getBasePriceFromCostTable(mmKey, supplier);
 
-    if (Number.isFinite(basePrice)) {
-      const codeUpper = (row.itemCode || "").toUpperCase();
-      const nameText = (row.name || "").toString();
+          if (Number.isFinite(basePrice)) {
+            const isWhite =
+              nameText.includes("白") ||
+              /W$/.test(codeUpper);
 
-      // ✅ 白色（不加價）
-      const isWhite =
-        nameText.includes("白") ||
-        /W$/.test(codeUpper);
+            const isColor =
+              !isWhite &&
+              (/(黑|紅|藍|綠|黃)/.test(nameText) ||
+                /(R|BL|G|Y)$/.test(codeUpper));
 
-      // ✅ 彩色（不含白色、透明不列入）
-      const isColor =
-        !isWhite &&
-        /(黑|紅|藍|綠|黃)/.test(nameText) ||
-        /(R|BL|G|Y)$/.test(codeUpper);
+            // FSG-3 彩色 +5%
+            if (supplier === "shunbo" && codeUpper.includes("FSG-3") && isColor) {
+              basePrice *= 1.05;
+            }
 
-      // ✅ FSG-3 彩色 +5%
-      if (supplier === "shunbo" && codeUpper.includes("FSG-3") && isColor) {
-        basePrice *= 1.05;
+            // HST 彩色 +8%
+            if (supplier === "shunbo" && codeUpper.includes("HST") && isColor) {
+              basePrice *= 1.08;
+            }
+
+            unitPrice = basePrice * rateVal; // 台幣 / 米
+            cost = unitPrice * row.meters;
+          }
+        }
       }
-
-      // ✅ HST 彩色 +8%
-      if (supplier === "shunbo" && codeUpper.includes("HST") && isColor) {
-        basePrice *= 1.08;
-      }
-
-      unitPrice = basePrice * rateVal; // 台幣 / 米
-      cost = unitPrice * row.meters;
     }
-  }
-}
-
-
 
     const profit = row.amount - cost;
 
@@ -578,17 +591,17 @@ function recalcAndRender() {
     };
   });
 
-  // ❌ 排除不需要列出的品項 Z043 / Z044 / A1
+  // 排除 Z043 / Z044 / A1
   processedRows = processedRows.filter((row) => {
     const code = (row.itemCode || "").toUpperCase();
-    return !code.startsWith("Z043") &&
-       !code.startsWith("Z044") &&
-       code !== "A1";
+    return (
+      !code.startsWith("Z043") &&
+      !code.startsWith("Z044") &&
+      code !== "A1"
+    );
   });
 
-  // ✅ 儲存到 localStorage，給其他頁面用
   saveToLocalStorage();
-
   renderTable();
 }
 
@@ -624,7 +637,6 @@ function renderTable() {
     resultTbody.appendChild(tr);
   });
 
-  // 總計列
   const totalTr = document.createElement("tr");
   totalTr.classList.add("bg-yellow-100", "font-semibold");
   totalTr.innerHTML = `
