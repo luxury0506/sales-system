@@ -522,7 +522,18 @@ function handleSalesFile(e) {
           amountColIndex !== -1 ? parseNumber(row[amountColIndex]) : 0;
 
         const { specMm, cutMm } = extractMmInfo(name);
-        const meters = cutMm != null ? qty * (cutMm / 1000) : qty;
+
+        let meters = qty;
+        // 新增規則：如果物品編號或品名結尾有數字+M (排除 mm)，代表銷貨數量就是總米數，不須做裁切(÷1000)換算
+        const isMeterUnit = 
+          (/[0-9][Mm]$/.test(itemCode) && !/mm$/i.test(itemCode)) || 
+          (/[0-9][Mm]$/.test(name)     && !/mm$/i.test(name));
+
+        if (isMeterUnit) {
+          meters = qty;
+        } else if (cutMm != null) {
+          meters = qty * (cutMm / 1000);
+        }
 
         results.push({
           customer: currentCustomer,
