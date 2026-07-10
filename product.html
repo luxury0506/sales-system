@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>產品系列別統計</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="min-h-screen bg-slate-100">
+  <div class="max-w-6xl mx-auto py-6 px-4 space-y-6">
+    <header class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">產品系列別米數與銷售統計</h1>
+        <p class="text-sm text-slate-600 mt-1">
+          資料來源：<b>請先在主頁（index.html）上傳銷售檔並完成計算</b>。本頁會將不同長度規格但同屬性的物品編號（例：CFT-3-0A 與 CFT-3-0A-530M）自動合併加總。
+        </p>
+      </div>
+      <a
+        href="index.html"
+        class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+      >
+        回到主頁
+      </a>
+    </header>
+
+    <section class="bg-white shadow rounded-xl p-4 space-y-3">
+      <div id="status" class="text-sm text-slate-700"></div>
+
+      <div class="flex items-center justify-end gap-2">
+        <button
+          id="downloadProductExcel"
+          class="hidden inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600"
+        >
+          匯出產品統計 Excel
+        </button>
+      </div>
+
+      <!-- 產品彙總表 -->
+      <div class="overflow-auto max-h-[480px] border rounded-lg">
+        <table class="min-w-full text-xs text-left">
+          <thead class="bg-slate-50 sticky top-0">
+            <tr>
+              <th class="border px-2 py-1">產品系列 (合併後)</th>
+              <th class="border px-2 py-1 text-right">總計數量</th>
+              <th class="border px-2 py-1 text-right">總計米數</th>
+              <th class="border px-2 py-1 text-right">銷售總額</th>
+              <th class="border px-2 py-1 text-right">成本總額</th>
+              <th class="border px-2 py-1 text-right">總毛利</th>
+              <th class="border px-2 py-1 text-right">毛利率</th>
+            </tr>
+          </thead>
+          <tbody id="productTbody" class="divide-y"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 圖表 -->
+    <section class="bg-white shadow rounded-xl p-4 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-700">產品系列總米數排行榜</h2>
+      <div class="flex items-center gap-2 text-xs mb-2">
+        <label for="chartLimitSelect" class="text-slate-600">顯示產品數：</label>
+        <select
+          id="chartLimitSelect"
+          class="border rounded px-2 py-1 text-xs text-slate-700"
+        >
+          <option value="10">Top 10</option>
+          <option value="20">Top 20</option>
+          <option value="all">全部</option>
+        </select>
+      </div>
+      <canvas id="metersChart" height="160"></canvas>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="product.js"></script>
+</body>
+</html>
