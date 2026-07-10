@@ -60,22 +60,77 @@ function loadFromLocalStorage() {
   }
 }
 
-function extractProductSeries(itemCode) {
-  if (!itemCode) return "未填寫物品編號";
+function extractMmInfo(name) {
+  if (!name) return { specMm: null, cutMm: null };
+  let specMm = null;
+  let cutMm = null;
+  let m = /mm\s*[x*]\s*(\d+(?:\.\d+)?)/i.exec(name);
+  if (m) {
+    cutMm = parseFloat(m[1]);
+  } else {
+    m = /[x*]\s*(\d+(?:\.\d+)?)(?=\s*mm\b)/i.exec(name);
+    if (m) cutMm = parseFloat(m[1]);
+  }
+  return { specMm, cutMm };
+}
+
+function extractProductSeries(row) {
+  let code = (row.itemCode || "").trim();
+  if (!code) return "未填寫物品編號";
+  const name = (row.name || "").trim();
   
-  const str = itemCode.trim();
-  const replaced = str.replace(/[-_\s]*(?:\d{3,}[a-z]*|\d+(?:\.\d+)?(?:m|b|r|g|y|w|c|bl|cb))$/i, "");
-  
-  // 防呆機制：如果整串都被當成長度切除（變成空白），則保留原本的文字
-  return replaced === "" ? str : replaced;
+  // 1. 若明顯包含 M 長度單位結尾 (如 200M, 530M)，直接切除
+  if (/[0-9]+[Mm]$/.test(code)) {
+    return code.replace(/[-_\s]*\d+(?:\.\d+)?(?:[Mm])?$/, "");
+  }
+
+  const segments = code.split(/[-_]/);
+  if (segments.length > 1) {
+    const last = segments[segments.length - 1];
+    const lastNumMatch = last.match(/^(\d+(?:\.\d+)?)([A-Za-z]*)$/);
+    
+    if (lastNumMatch) {
+      const numStr = lastNumMatch[1];
+      const letters = lastNumMatch[2];
+      
+      let shouldCut = false;
+      
+      // 2. 判斷是否有裁切長度 (從品名取得)
+      const info = extractMmInfo(name);
+      if (info.cutMm != null && parseFloat(numStr) === info.cutMm) {
+        shouldCut = true;
+      }
+      
+      // 3. 備用：您剛剛提供的明確長度清單
+      const explicitLengths = ['115', '053', '200', '530', '1000', '1650'];
+      if (explicitLengths.includes(numStr)) {
+        shouldCut = true;
+      }
+      
+      // 4. 若純數字且大於三位數且沒有前導零 (避免切到 065)，也當作長度
+      if (letters === "" && numStr.length >= 3 && !numStr.startsWith("0")) {
+        shouldCut = true;
+      }
+      
+      if (shouldCut) {
+        segments.pop();
+        // 如果有字母(例如 b, c)，把它加回倒數第二段，保留顏色！
+        if (letters) {
+          segments[segments.length - 1] += letters;
+        }
+        return segments.join("-");
+      }
+    }
+  }
+  return code;
 }
 
 function buildProductSummary(rows) {
   const map = new Map();
 
   rows.forEach((row) => {
-    // 使用正規化的物品編號來當作分類 Key
-    const key = extractProductSeries(row.itemCode);
+    // 傳入完整的 row，讓 extractProductSeries 可以利用 row.name 進行裁切分析
+    const key = extractProductSeries(row);
     
     if (!map.has(key)) {
       map.set(key, {
