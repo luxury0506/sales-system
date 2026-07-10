@@ -63,11 +63,9 @@ function loadFromLocalStorage() {
 function extractProductSeries(itemCode) {
   if (!itemCode) return "未填寫物品編號";
   
-  // 將結尾的裁切長度或米數後綴移除，例如：
-  // "CFT-3-0A-200" -> "CFT-3-0A"
-  // "CFT-3-0A-530M" -> "CFT-3-0A"
-  // "CFT-3-0A-200m" -> "CFT-3-0A"
-  return itemCode.trim().replace(/-\d+(?:\.\d+)?(?:[Mm])?$/, "");
+  // 將結尾的裁切長度或米數後綴移除，適用於所有產品 (CFT, HST, FSG, SR... 等)
+  // 支援格式如 "-200", "-530M", " 200", "_530M"
+  return itemCode.trim().replace(/[-_\s]*\d+(?:\.\d+)?(?:[Mm])?$/, "");
 }
 
 function buildProductSummary(rows) {
