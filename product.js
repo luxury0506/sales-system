@@ -63,9 +63,12 @@ function loadFromLocalStorage() {
 function extractProductSeries(itemCode) {
   if (!itemCode) return "未填寫物品編號";
   
-  // 將結尾的裁切長度或米數後綴移除，適用於所有產品 (CFT, HST, FSG, SR... 等)
-  // 支援格式如 "-200", "-530M", " 200", "_530M"
-  return itemCode.trim().replace(/[-_\s]*\d+(?:\.\d+)?(?:[Mm])?$/, "");
+  // 將結尾的裁切長度/米數/顏色後綴移除，保留系列與規格。
+  // 規則：
+  // 1. 若結尾是 3 位數以上(如 200, 115, 053)且可選帶有英文字母，則切除。
+  // 2. 若結尾含特定顏色/長度單位英文字母(m, b, r, g, y, w, c, bl, cb)，不管幾位數都切除。
+  // 這可以保護 CFT-3-0A (A不在移除清單) 或是 fsg-3-03 (只有2位數無字母) 不會被誤切。
+  return itemCode.trim().replace(/[-_\s]*(?:\d{3,}[a-z]*|\d+(?:\.\d+)?(?:m|b|r|g|y|w|c|bl|cb))$/i, "");
 }
 
 function buildProductSummary(rows) {
