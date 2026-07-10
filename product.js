@@ -63,12 +63,11 @@ function loadFromLocalStorage() {
 function extractProductSeries(itemCode) {
   if (!itemCode) return "未填寫物品編號";
   
-  // 將結尾的裁切長度/米數/顏色後綴移除，保留系列與規格。
-  // 規則：
-  // 1. 若結尾是 3 位數以上(如 200, 115, 053)且可選帶有英文字母，則切除。
-  // 2. 若結尾含特定顏色/長度單位英文字母(m, b, r, g, y, w, c, bl, cb)，不管幾位數都切除。
-  // 這可以保護 CFT-3-0A (A不在移除清單) 或是 fsg-3-03 (只有2位數無字母) 不會被誤切。
-  return itemCode.trim().replace(/[-_\s]*(?:\d{3,}[a-z]*|\d+(?:\.\d+)?(?:m|b|r|g|y|w|c|bl|cb))$/i, "");
+  const str = itemCode.trim();
+  const replaced = str.replace(/[-_\s]*(?:\d{3,}[a-z]*|\d+(?:\.\d+)?(?:m|b|r|g|y|w|c|bl|cb))$/i, "");
+  
+  // 防呆機制：如果整串都被當成長度切除（變成空白），則保留原本的文字
+  return replaced === "" ? str : replaced;
 }
 
 function buildProductSummary(rows) {
@@ -81,6 +80,7 @@ function buildProductSummary(rows) {
     if (!map.has(key)) {
       map.set(key, {
         product: key,
+        names: new Set(), // 收集同屬性下的所有品名
         totalQty: 0,
         totalMeters: 0,
         totalAmount: 0,
@@ -90,6 +90,10 @@ function buildProductSummary(rows) {
     }
     
     const agg = map.get(key);
+    if (row.name) {
+      // 避免品名太長或包含長度綴飾，先簡單收納
+      agg.names.add(row.name.trim());
+    }
     agg.totalQty += Number(row.qty) || 0;
     agg.totalMeters += Number(row.meters) || 0;
     agg.totalAmount += Number(row.amount) || 0;
@@ -99,7 +103,12 @@ function buildProductSummary(rows) {
 
   const list = Array.from(map.values()).map((x) => {
     const marginRate = x.totalAmount > 0 ? x.totalProfit / x.totalAmount : 0;
-    return { ...x, marginRate };
+    // 將收集到的 Set 轉回逗號分隔字串
+    const namesArray = Array.from(x.names);
+    // 如果名字太多限制一下長度，或者全顯示
+    const joinedNames = namesArray.length > 5 ? namesArray.slice(0, 5).join("、 ") + "..." : namesArray.join("、 ");
+    
+    return { ...x, marginRate, displayNames: joinedNames };
   });
 
   // 依總米數由高到低排序，因為通常看產品會比較關注銷貨的米數
@@ -113,6 +122,7 @@ function renderTable() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="border px-2 py-1">${escapeHtml(c.product)}</td>
+      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[200px]" title="${escapeHtml(c.displayNames)}">${escapeHtml(c.displayNames)}</td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(c.totalQty)}</td>
       <td class="border px-2 py-1 text-right">${formatMeters(c.totalMeters)}</td>
       <td class="border px-2 py-1 text-right">${formatMoney(c.totalAmount)}</td>
@@ -177,9 +187,10 @@ function renderChart(limitMode = "10") {
 function downloadExcel() {
   if (!productSummary.length) return;
   const aoa = [
-    ["產品系列", "總計數量", "總計米數", "銷售總額", "成本總額", "總毛利", "毛利率"],
+    ["產品系列", "涵蓋之品名參考", "總計數量", "總計米數", "銷售總額", "成本總額", "總毛利", "毛利率"],
     ...productSummary.map((c) => [
       c.product,
+      c.displayNames,
       Math.round(c.totalQty),
       Number((Math.round(c.totalMeters * 1000) / 1000).toFixed(3)),
       Math.round(c.totalAmount),
