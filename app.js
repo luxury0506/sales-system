@@ -78,8 +78,86 @@ function calculateMeters(itemName, salesQty) {
 }
 
 /***********************
- * 從品名抓 mm 規格與裁切長度
+ * CFT-3 / CFT-6 規格資料（取自 2604銷售分析.xlsx「PVC原料成本」工作表）
+ * 用來：
+ *   ① 從物品編號解析 AWG／規格碼 → 內徑(mm)、壁厚(mm)
+ *      （銷售明細的品名常常只有 AWG 代碼，沒有直接寫內徑 mm，
+ *        例如「PVC高壓套管 0A* 100mm」「PVC高壓套管 8AWG(透明)」）
+ *   ② 一鍵計算並存入 PVC_COST_CFT3 / PVC_COST_CFT6
  ************************/
+const CFT_SPEC_TABLE = {
+  "CFT-3": [
+    ["0A", 8.38, 0.6], ["1A", 7.47, 0.6], ["2A", 6.68, 0.6], ["3A", 5.94, 0.6],
+    ["4A", 5.28, 0.55], ["5A", 4.72, 0.55], ["6A", 4.22, 0.55], ["7A", 3.76, 0.55],
+    ["8A", 3.38, 0.55], ["9A", 3, 0.55], ["10A", 2.69, 0.55], ["11A", 2.41, 0.45],
+    ["12A", 2.16, 0.45], ["13A", 1.93, 0.45], ["14A", 1.68, 0.45], ["15A", 1.5, 0.45],
+    ["16A", 1.35, 0.45], ["17A", 1.19, 0.45], ["18A", 1.07, 0.45], ["19A", 0.97, 0.45],
+    ["20A", 0.86, 0.45], ["5/16A", 7.94, 0.6], ["3/8A", 9.53, 0.6],
+  ],
+  "CFT-6": [
+    ["0A", 8.38, 0.7], ["1A", 7.47, 0.7], ["2A", 6.68, 0.7], ["3A", 5.94, 0.7],
+    ["4A", 5.28, 0.7], ["5A", 4.72, 0.7], ["6A", 4.22, 0.7], ["7A", 3.76, 0.7],
+    ["8A", 3.38, 0.7], ["9A", 3, 0.7], ["10A", 2.69, 0.7], ["11A", 2.41, 0.7],
+    ["12A", 2.16, 0.7], ["13A", 1.93, 0.7], ["14A", 1.68, 0.7], ["15A", 1.5, 0.7],
+    ["16A", 1.35, 0.7], ["17A", 1.19, 0.7], ["18A", 1.07, 0.7], ["19A", 0.97, 0.7],
+    ["20A", 0.86, 0.7], ["5/16A", 7.94, 0.7], ["3/8A", 9.53, 0.75], ["7/16A", 11.1, 0.75],
+    ["1/2A", 12.7, 0.75], ["9/16A", 14, 0.85], ["5/8A", 15.9, 0.85],
+  ],
+};
+
+// AWG／規格碼 -> 內徑(mm)。兩個系列的內徑相同，只有壁厚不同，合併成一張查表方便從物品編號反查。
+const AWG_TO_INNER_MM = {};
+Object.values(CFT_SPEC_TABLE).forEach((rows) => {
+  rows.forEach(([label, innerMm]) => {
+    AWG_TO_INNER_MM[label.toUpperCase()] = innerMm;
+  });
+});
+
+/**
+ * 從物品編號解析出 CFT 系列與 AWG／規格碼，回傳內徑(mm)。
+ * 例："CFT-3-0A-100" -> "0A" -> 8.38
+ *     "CFT-3-2AC"     -> 去掉尾端顏色字母 "C" -> "2A" -> 6.68
+ *     "CFT-6-7/16A-550" -> "7/16A" -> 11.1
+ *     "CFT-3-09-300"  -> 純數字規格 "09" -> 9（沒有 AWG 字尾的內徑代號）
+ * 找不到就回傳 null，呼叫端會退回原本用品名文字抓 mm 的方式。
+ */
+function getCftInnerMmFromCode(itemCode) {
+  const code = (itemCode || "").toString().trim().toUpperCase();
+  if (!code.startsWith("CFT-3") && !code.startsWith("CFT-6")) return null;
+
+  const parts = code.split("-");
+  // parts: ["CFT","3","0A","100"] 或 ["CFT","6","7/16A","550"] 等
+  if (parts.length < 3) return null;
+  let specToken = parts[2];
+  if (!specToken) return null;
+
+  // 直接命中（"0A"、"7/16A"、"3/8A" 這種）
+  if (AWG_TO_INNER_MM[specToken] != null) return AWG_TO_INNER_MM[specToken];
+
+  // 去掉尾端顏色／材質字母後再試一次（"2AC" -> "2A"，"8AC" -> "8A"）
+  if (specToken.length > 1 && /A[A-Z]$/.test(specToken)) {
+    const withoutColorSuffix = specToken.slice(0, -1);
+    if (AWG_TO_INNER_MM[withoutColorSuffix] != null) {
+      return AWG_TO_INNER_MM[withoutColorSuffix];
+    }
+  }
+
+  // 純數字規格碼（沒有 AWG 字尾），例如 "09" -> 9、"9" -> 9
+  if (/^\d+(\.\d+)?$/.test(specToken)) {
+    const v = parseFloat(specToken);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+
+  // 純數字規格碼 + 尾端顏色字母，例如 "12C" -> "12" -> 12
+  if (/^\d+(\.\d+)?[A-Z]$/.test(specToken)) {
+    const v = parseFloat(specToken.slice(0, -1));
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+
+  return null;
+}
+
+
 function extractMmInfo(name) {
   if (!name) return { specMm: null, cutMm: null };
 
@@ -521,7 +599,13 @@ function handleSalesFile(e) {
         const amount =
           amountColIndex !== -1 ? parseNumber(row[amountColIndex]) : 0;
 
-        const { specMm, cutMm } = extractMmInfo(name);
+        const { specMm: textSpecMm, cutMm } = extractMmInfo(name);
+
+        // CFT-3 / CFT-6 品項：優先用物品編號解析出來的內徑(mm)，
+        // 因為品名常常只寫 AWG 代碼（例如「0A* 100mm」「8AWG(透明)」），
+        // 用文字規則抓到的第一個 mm 數字常常是「裁切長度」而不是「內徑」。
+        const codeSpecMm = getCftInnerMmFromCode(itemCode);
+        const specMm = codeSpecMm != null ? codeSpecMm : textSpecMm;
 
         let meters = qty;
         // 新增規則：如果物品編號或品名結尾有數字+M (排除 mm)，代表銷貨數量就是總米數，不須做裁切(÷1000)換算
@@ -679,6 +763,56 @@ if (pvcCalcSaveBtn) {
     }
 
     pvcCalcStatus.textContent = "PVC 成本已計算並儲存。";
+  });
+}
+
+// 一鍵存入 CFT-3 / CFT-6 全部規格成本
+// 直接比照 2604銷售分析.xlsx 的公式：每米重(g) = (外徑-壁厚) × 壁厚 × 3.14 × 1.3
+// 不套用「廢料 (%)」欄位，因為公式裡的 1.3 已經含耗損係數了。
+const pvcBulkFillBtn = document.getElementById("pvcBulkFillBtn");
+if (pvcBulkFillBtn) {
+  pvcBulkFillBtn.addEventListener("click", () => {
+    const pelletPrice = parseFloat(pvcPelletPriceInput ? pvcPelletPriceInput.value : NaN);
+
+    if (!Number.isFinite(pelletPrice) || pelletPrice <= 0) {
+      pvcCalcStatus.textContent = "請先輸入有效的『PVC 粒 (元/Kg)』，再按一鍵存入。";
+      return;
+    }
+
+    let count3 = 0;
+    let count6 = 0;
+
+    Object.entries(CFT_SPEC_TABLE).forEach(([series, rows]) => {
+      rows.forEach(([label, innerMm, wallMm]) => {
+        const outerMm = innerMm + wallMm * 2;
+        const weightPerM = (outerMm - wallMm) * wallMm * 3.14 * 1.3; // g/M
+        const costPerM = (weightPerM / 1000) * pelletPrice; // 元/M
+
+        const key = innerMm.toFixed(3);
+        if (series === "CFT-3") {
+          PVC_COST_CFT3[key] = costPerM;
+          count3++;
+        } else {
+          PVC_COST_CFT6[key] = costPerM;
+          count6++;
+        }
+      });
+    });
+
+    savePvcCostToLocalStorage();
+    renderPvcSummary();
+
+    if (pvcLastInfo) {
+      pvcLastInfo.textContent =
+        `一鍵存入完成：CFT-3 共 ${count3} 個規格、CFT-6 共 ${count6} 個規格（單價 ${pelletPrice} 元/Kg）。`;
+    }
+    pvcCalcStatus.textContent =
+      "已依 PVC 粒單價一次計算並存入所有 CFT-3／CFT-6 規格成本，可以重新上傳銷貨明細套用。";
+
+    // 若銷貨明細已經上傳過，順便用新的 PVC 成本重新計算一次
+    if (typeof recalcAndRender === "function" && baseRows && baseRows.length) {
+      recalcAndRender();
+    }
   });
 }
 

@@ -217,15 +217,27 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-3 mt-3 text-sm">
+  <div class="flex items-center gap-3 mt-3 text-sm flex-wrap">
     <button
       id="pvcCalcSaveBtn"
       class="px-3 py-1.5 rounded text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600"
     >
       計算並儲存 PVC 成本
     </button>
+    <button
+      id="pvcBulkFillBtn"
+      type="button"
+      class="px-3 py-1.5 rounded text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700"
+    >
+      🚀 一鍵存入 CFT-3／CFT-6 全部規格成本
+    </button>
     <div id="pvcCalcStatus" class="text-xs text-slate-600"></div>
   </div>
+  <p class="text-xs text-slate-500">
+    「一鍵存入」會用上面「PVC 粒 (元/Kg)」的單價，比照 2604銷售分析.xlsx 的公式，
+    把 CFT-3／CFT-6 全部 AWG／內徑規格的每米成本一次算好存起來（不套用「廢料 (%)」，公式本身已含耗損係數），
+    這樣上傳銷貨明細時，PVC 品項才抓得到成本。改上面的單價後記得再按一次「一鍵存入」更新。
+  </p>
 
   <!-- 最新一次計算結果 -->
   <div id="pvcLastInfo" class="mt-2 text-xs text-emerald-700"></div>
@@ -252,23 +264,12 @@
         <span>📋 PVC 每米成本速查表（CFT-3 / CFT-6，比照 2604銷售分析.xlsx）</span>
       </h2>
       <div class="flex flex-wrap items-end gap-3 text-sm">
-        <div>
-          <label class="block text-slate-700 mb-1">PVC粒單價 (元/Kg)</label>
-          <input
-            id="pvcTablePelletPrice"
-            type="number"
-            step="0.001"
-            value="54"
-            class="border rounded px-2 py-1 text-sm w-32"
-          />
+        <div class="text-slate-600">
+          PVC粒單價：
+          <span id="pvcTablePriceDisplay" class="font-semibold text-slate-800">54</span>
+          元/Kg
+          <span class="text-xs text-slate-400">（跟隨上方「🧮 PVC 成本計算 ＋ 儲存」區塊的「PVC 粒 (元/Kg)」欄位，改那裡即可全表連動，如同 Excel 改 E3 儲存格）</span>
         </div>
-        <button
-          id="pvcTableSyncBtn"
-          type="button"
-          class="px-3 py-1.5 rounded text-xs font-medium bg-slate-200 text-slate-700 hover:bg-slate-300"
-        >
-          套用上方「PVC 粒 (元/Kg)」欄位的值
-        </button>
         <div class="flex rounded-full overflow-hidden border border-slate-200 text-xs">
           <button id="pvcTableTabCFT3" type="button" class="px-3 py-1.5 font-medium bg-blue-500 text-white">CFT-3（CFT-300）</button>
           <button id="pvcTableTabCFT6" type="button" class="px-3 py-1.5 font-medium bg-slate-100 text-slate-700">CFT-6（CFT-600）</button>
@@ -428,18 +429,27 @@
         return { outerD, weightPerM, costPerM, cost305 };
       }
 
+      // 全域單一價格來源：讀「🧮 PVC 成本計算 ＋ 儲存」區塊的 #pvcPelletPrice，
+      // 就像 Excel 改 E3 儲存格，全部相關數字一起連動，這裡不再另外開一個價格欄位。
+      function getGlobalPelletPrice() {
+        const mainPriceEl = document.getElementById("pvcPelletPrice");
+        const v = mainPriceEl ? parseFloat(mainPriceEl.value) : NaN;
+        return Number.isFinite(v) ? v : 0;
+      }
+
       function renderPvcTable() {
         const tbody = document.getElementById("pvcTableBody");
-        const priceEl = document.getElementById("pvcTablePelletPrice");
-        if (!tbody || !priceEl) return;
+        const priceDisplay = document.getElementById("pvcTablePriceDisplay");
+        if (!tbody) return;
 
-        const pelletPrice = parseFloat(priceEl.value);
+        const pelletPrice = getGlobalPelletPrice();
+        if (priceDisplay) priceDisplay.textContent = pelletPrice;
+
         const rows = PVC_SPEC_TABLE[pvcTableActiveSeries] || [];
 
         tbody.innerHTML = "";
         rows.forEach(([label, innerD, wall]) => {
-          const price = Number.isFinite(pelletPrice) ? pelletPrice : 0;
-          const { outerD, weightPerM, costPerM, cost305 } = pvcCalcRow(innerD, wall, price);
+          const { outerD, weightPerM, costPerM, cost305 } = pvcCalcRow(innerD, wall, pelletPrice);
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td class="border px-2 py-1">${label}</td>
@@ -456,8 +466,7 @@
 
       const tab3 = document.getElementById("pvcTableTabCFT3");
       const tab6 = document.getElementById("pvcTableTabCFT6");
-      const priceInput = document.getElementById("pvcTablePelletPrice");
-      const syncBtn = document.getElementById("pvcTableSyncBtn");
+      const globalPriceInput = document.getElementById("pvcPelletPrice");
 
       function setActiveTab(series) {
         pvcTableActiveSeries = series;
@@ -475,16 +484,21 @@
 
       if (tab3) tab3.addEventListener("click", () => setActiveTab("CFT-3"));
       if (tab6) tab6.addEventListener("click", () => setActiveTab("CFT-6"));
-      if (priceInput) priceInput.addEventListener("input", renderPvcTable);
-      if (syncBtn) {
-        syncBtn.addEventListener("click", function () {
-          const mainPriceEl = document.getElementById("pvcPelletPrice");
-          if (mainPriceEl && priceInput) {
-            priceInput.value = mainPriceEl.value;
-            renderPvcTable();
-          }
-        });
+      // 使用者直接打字時即時連動
+      if (globalPriceInput) {
+        globalPriceInput.addEventListener("input", renderPvcTable);
+        globalPriceInput.addEventListener("change", renderPvcTable);
       }
+      // 保險機制：若 app.js 用程式方式改動 #pvcPelletPrice 的值（不會觸發 input 事件），
+      // 這裡每秒檢查一次，確保速查表跟原本頁面一樣「改一處、全部動」。
+      let lastKnownPrice = getGlobalPelletPrice();
+      setInterval(() => {
+        const current = getGlobalPelletPrice();
+        if (current !== lastKnownPrice) {
+          lastKnownPrice = current;
+          renderPvcTable();
+        }
+      }, 1000);
 
       renderPvcTable();
     })();
