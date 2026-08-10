@@ -964,6 +964,18 @@ function renderTable() {
   `;
   resultTbody.appendChild(totalTr);
 
+  // 讓頁面上其他獨立功能（例如「本月損益總覽」）可以讀到這批明細的合計，
+  // 不用重新解析一次表格。
+  window.__currentFileTotals = {
+    totalQty,
+    totalMeters,
+    totalAmount,
+    totalCost,
+    totalProfit,
+    rowCount: processedRows.length,
+    updatedAt: new Date().toISOString(),
+  };
+
   tableContainer.classList.remove("hidden");
   downloadBtn.classList.remove("hidden");
 }
@@ -979,6 +991,7 @@ function clearAnalysisData() {
   }
   baseRows = [];
   processedRows = [];
+  window.__currentFileTotals = null;
   resultTbody.innerHTML = "";
   tableContainer.classList.add("hidden");
   downloadBtn.classList.add("hidden");
