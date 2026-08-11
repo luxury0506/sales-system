@@ -84,6 +84,14 @@ function extractProductSeries(row) {
     return code.replace(/[-_\s]*\d+(?:\.\d+)?(?:[Mm])?$/, "");
   }
 
+  // 1b. 若結尾是「字母 + M」(例如 FSG-3-03B 與 FSG-3-03BM、
+  // CFT-3-2AC 與 CFT-3-2ACM)，這個 M 是「米」計量單位標記，
+  // 不是規格或顏色差異，屬於同一品項，直接去除這個尾綴 M 再繼續判斷。
+  // 注意：數字+M (如 530M) 已經在規則1處理過，這裡只會抓到「字母+M」的情況。
+  if (/[A-Za-z]M$/.test(code)) {
+    code = code.replace(/M$/, "");
+  }
+
   const segments = code.split(/[-_]/);
   if (segments.length > 1) {
     const last = segments[segments.length - 1];
