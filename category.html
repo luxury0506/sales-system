@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>產品系列別統計</title>
+  <title>各類型加總金額統計</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -10,17 +10,19 @@
   <div class="max-w-6xl mx-auto py-6 px-4 space-y-6">
     <header class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">產品系列別米數與銷售統計</h1>
+        <h1 class="text-2xl font-bold text-slate-800">各類型加總金額統計</h1>
         <p class="text-sm text-slate-600 mt-1">
-          資料來源：<b>請先在主頁（index.html）上傳銷售檔並完成計算</b>。本頁會將不同長度規格但同屬性的物品編號（例：CFT-3-0A 與 CFT-3-0A-530M）自動合併加總。
+          把物品編號往上收斂到「大分類」（例如 FSG-3、FSG-2、CFT-3、CFT-6、SRG、HST、H…）再加總，
+          方便看整個系列的總銷量與毛利，而不是只看到單一規格。<br>
+          資料來源：請先在主頁完成計算，本頁會讀取分析結果。
         </p>
       </div>
       <div class="flex gap-2">
         <a
-          href="category.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+          href="product.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
         >
-          🧩 改看大分類加總
+          📦 改看細規格明細
         </a>
         <a
           href="index.html"
@@ -36,38 +38,38 @@
 
       <div class="flex items-center justify-end gap-2">
         <button
-          id="downloadProductExcel"
+          id="downloadCategoryExcel"
           class="hidden inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600"
         >
-          匯出產品統計 Excel
+          匯出分類加總 Excel
         </button>
       </div>
 
-      <!-- 產品彙總表 -->
       <div class="overflow-auto max-h-[480px] border rounded-lg">
         <table class="min-w-full text-xs text-left">
           <thead class="bg-slate-50 sticky top-0">
             <tr>
-              <th class="border px-2 py-1">產品系列 (合併後)</th>
-              <th class="border px-2 py-1">涵蓋之品名參考</th>
+              <th class="border px-2 py-1">分類</th>
+              <th class="border px-2 py-1 text-right">涵蓋編號數</th>
+              <th class="border px-2 py-1">涵蓋物品編號參考</th>
               <th class="border px-2 py-1 text-right">總計數量</th>
               <th class="border px-2 py-1 text-right">總計米數</th>
               <th class="border px-2 py-1 text-right">銷售總額</th>
-              <th class="border px-2 py-1 text-right">成本總額</th>
+              <th class="border px-2 py-1 text-right">銷貨成本</th>
               <th class="border px-2 py-1 text-right">總毛利</th>
               <th class="border px-2 py-1 text-right">毛利率</th>
             </tr>
           </thead>
-          <tbody id="productTbody" class="divide-y"></tbody>
+          <tbody id="categoryTbody"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- 圖表 -->
     <section class="bg-white shadow rounded-xl p-4 space-y-4">
-      <h2 class="text-sm font-semibold text-slate-700">產品系列總米數排行榜</h2>
+      <h2 class="text-sm font-semibold text-slate-700">分類銷售額排行榜</h2>
+
       <div class="flex items-center gap-2 text-xs mb-2">
-        <label for="chartLimitSelect" class="text-slate-600">顯示產品數：</label>
+        <label for="chartLimitSelect" class="text-slate-600">顯示分類數：</label>
         <select
           id="chartLimitSelect"
           class="border rounded px-2 py-1 text-xs text-slate-700"
@@ -77,11 +79,12 @@
           <option value="all">全部</option>
         </select>
       </div>
-      <canvas id="metersChart" height="160"></canvas>
+
+      <canvas id="categoryAmountChart" height="160"></canvas>
     </section>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="product.js"></script>
+  <script src="category.js"></script>
 </body>
 </html>

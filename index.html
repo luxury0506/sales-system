@@ -32,7 +32,16 @@
         </p>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
+        <!-- 連到本月損益總覽頁 -->
+        <a
+          href="pl.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          📅 本月損益
+        </a>
+
         <!-- 連到客戶統計頁 -->
         <a
           href="customer.html"
@@ -59,6 +68,14 @@
           📦 產品別統計
         </a>
 
+        <!-- 連到各類型加總統計頁 -->
+        <a
+          href="category.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          🧩 各類型加總
+        </a>
+
         <!-- 新增：連到 PVC 成本設定頁 -->
         <a
           href="pvc.html"
@@ -70,14 +87,22 @@
       </div>
     </div>
 
-    <!-- 📅 本月損益總覽 -->
-    <section class="bg-white shadow rounded-xl p-5 space-y-4">
-      <h2 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
-        <span>📅 本月損益總覽</span>
-      </h2>
+    <!-- 📅 記錄今天的損益（完整月總覽已搬到 pl.html） -->
+    <section class="bg-white shadow rounded-xl p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <span>📅 記錄今天的損益</span>
+        </h2>
+        <a
+          href="pl.html"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+        >
+          📊 查看本月損益總覽
+        </a>
+      </div>
       <p class="text-xs text-slate-500">
-        每天上傳完銷貨明細、算出成本之後，按下面「✅ 記錄這批明細」把當天的合計存起來，就能看到這個月累計是賺還是賠。
-        同一天重複記錄會直接覆蓋，不會重複累加。
+        上傳完銷貨明細、算出成本之後，按「✅ 記錄這批明細」把當天的合計存起來。
+        同一天重複記錄會直接覆蓋，不會重複累加。完整月度累計、每日明細請到「本月損益總覽」頁面查看。
       </p>
 
       <div class="flex flex-wrap items-end gap-3 text-sm">
@@ -93,29 +118,6 @@
           ✅ 記錄這批明細
         </button>
         <div id="plRecordStatus" class="text-xs text-slate-600"></div>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-3 text-sm">
-        <label class="text-slate-700">檢視月份</label>
-        <input id="plMonthSelect" type="month" class="border rounded px-2 py-1 text-sm" />
-      </div>
-
-      <div id="plMonthBanner" class="rounded-lg p-4 text-center font-semibold text-lg"></div>
-
-      <div class="overflow-auto">
-        <table class="min-w-full text-xs text-left border">
-          <thead class="bg-slate-50">
-            <tr>
-              <th class="border px-2 py-1">日期</th>
-              <th class="border px-2 py-1 text-right">銷貨金額</th>
-              <th class="border px-2 py-1 text-right">銷貨成本</th>
-              <th class="border px-2 py-1 text-right">銷貨毛利</th>
-              <th class="border px-2 py-1 text-right">毛利率</th>
-              <th class="border px-2 py-1 text-center">操作</th>
-            </tr>
-          </thead>
-          <tbody id="plMonthTbody" class="divide-y"></tbody>
-        </table>
       </div>
     </section>
 
@@ -561,6 +563,9 @@
        結構：{ "2026-08": { "2026-08-10": {amount,cost,profit,rowCount}, ... }, ... }
        ============================================================ -->
   <script>
+    // 只保留「記錄今天這批明細」的寫入邏輯。
+    // 完整的月總覽檢視／刪除功能搬到 pl.html + pl.js，
+    // 兩邊讀寫同一把 localStorage key "monthlyPL"，資料共通。
     (function () {
       const STORAGE_KEY = "monthlyPL";
 
@@ -568,10 +573,6 @@
         const d = new Date();
         const pad = (n) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      }
-
-      function currentMonthStr() {
-        return todayStr().slice(0, 7);
       }
 
       function loadAll() {
@@ -601,83 +602,8 @@
       const dateInput = document.getElementById("plRecordDate");
       const recordBtn = document.getElementById("plRecordBtn");
       const recordStatus = document.getElementById("plRecordStatus");
-      const monthSelect = document.getElementById("plMonthSelect");
-      const banner = document.getElementById("plMonthBanner");
-      const tbody = document.getElementById("plMonthTbody");
 
       if (dateInput) dateInput.value = todayStr();
-      if (monthSelect) monthSelect.value = currentMonthStr();
-
-      function renderMonth() {
-        if (!monthSelect || !tbody || !banner) return;
-        const month = monthSelect.value || currentMonthStr();
-        const all = loadAll();
-        const monthData = all[month] || {};
-        const dates = Object.keys(monthData).sort();
-
-        tbody.innerHTML = "";
-        let totalAmount = 0;
-        let totalCost = 0;
-        let totalProfit = 0;
-
-        dates.forEach((date) => {
-          const d = monthData[date];
-          totalAmount += d.amount || 0;
-          totalCost += d.cost || 0;
-          totalProfit += d.profit || 0;
-
-          const marginRate = d.amount > 0 ? (d.profit / d.amount) * 100 : 0;
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td class="border px-2 py-1">${date}</td>
-            <td class="border px-2 py-1 text-right">${formatMoney(d.amount)}</td>
-            <td class="border px-2 py-1 text-right">${formatMoney(d.cost)}</td>
-            <td class="border px-2 py-1 text-right ${d.profit < 0 ? "text-red-600" : ""}">${formatMoney(d.profit)}</td>
-            <td class="border px-2 py-1 text-right">${marginRate.toFixed(1)}%</td>
-            <td class="border px-2 py-1 text-center">
-              <button type="button" data-date="${date}" class="plDeleteBtn text-red-500 hover:text-red-700 text-xs">刪除</button>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
-
-        if (!dates.length) {
-          tbody.innerHTML = `<tr><td colspan="6" class="border px-2 py-3 text-center text-slate-400">這個月還沒有記錄任何一天，上傳明細算完後按「✅ 記錄這批明細」。</td></tr>`;
-        }
-
-        tbody.querySelectorAll(".plDeleteBtn").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const date = btn.getAttribute("data-date");
-            const all2 = loadAll();
-            if (all2[month]) {
-              delete all2[month][date];
-              if (!Object.keys(all2[month]).length) delete all2[month];
-              saveAll(all2);
-            }
-            renderMonth();
-          });
-        });
-
-        const marginRate = totalAmount > 0 ? (totalProfit / totalAmount) * 100 : 0;
-        const isProfit = totalProfit >= 0;
-        banner.className =
-          "rounded-lg p-4 text-center font-semibold text-lg " +
-          (dates.length === 0
-            ? "bg-slate-50 text-slate-400"
-            : isProfit
-            ? "bg-emerald-50 text-emerald-700"
-            : "bg-red-50 text-red-700");
-
-        if (!dates.length) {
-          banner.textContent = `${month} 目前還沒有任何記錄`;
-        } else {
-          banner.textContent =
-            `${month} 本月至今：` +
-            (isProfit ? "🟢 賺 " : "🔴 賠 ") +
-            formatMoney(Math.abs(totalProfit)) +
-            ` 元　｜　銷貨金額 ${formatMoney(totalAmount)}　銷貨成本 ${formatMoney(totalCost)}　毛利率 ${marginRate.toFixed(1)}%　（已記錄 ${dates.length} 天）`;
-        }
-      }
 
       if (recordBtn) {
         recordBtn.addEventListener("click", () => {
@@ -700,16 +626,11 @@
           };
           saveAll(all);
 
-          recordStatus.textContent = `已記錄 ${date}：銷貨金額 ${formatMoney(totals.totalAmount)}、毛利 ${formatMoney(totals.totalProfit)}。`;
-
-          if (monthSelect) monthSelect.value = month;
-          renderMonth();
+          recordStatus.textContent =
+            `已記錄 ${date}：銷貨金額 ${formatMoney(totals.totalAmount)}、毛利 ${formatMoney(totals.totalProfit)}。` +
+            `（到「本月損益總覽」頁面可以看完整月度累計）`;
         });
       }
-
-      if (monthSelect) monthSelect.addEventListener("change", renderMonth);
-
-      renderMonth();
     })();
   </script>
 </body>
