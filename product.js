@@ -168,10 +168,19 @@ function buildProductSummary(rows) {
     const marginRate = x.totalAmount > 0 ? x.totalProfit / x.totalAmount : 0;
     // 將收集到的 Set 轉回逗號分隔字串
     const namesArray = Array.from(x.names);
-    // 如果名字太多限制一下長度，或者全顯示
-    const joinedNames = namesArray.length > 5 ? namesArray.slice(0, 5).join("、 ") + "..." : namesArray.join("、 ");
-    
-    return { ...x, marginRate, displayNames: joinedNames };
+    const isTruncated = namesArray.length > 5;
+    const shortNamesText = isTruncated ? namesArray.slice(0, 5).join("、 ") : namesArray.join("、 ");
+    const allNamesText = namesArray.join("、 ");
+
+    return {
+      ...x,
+      marginRate,
+      displayNames: allNamesText, // 匯出 Excel 用，維持完整清單
+      shortNamesText,
+      allNamesText,
+      isTruncated,
+      nameCount: namesArray.length,
+    };
   });
 
   // 依總米數由高到低排序，因為通常看產品會比較關注銷貨的米數
@@ -179,13 +188,34 @@ function buildProductSummary(rows) {
   return list;
 }
 
+// 渲染「涵蓋之品名參考」這一格：預設精簡顯示，超過5個品名時
+// 附上「顯示全部」按鈕，點擊可展開完整清單／再點一次收合。
+function renderNamesCell(cell, c, expanded) {
+  if (!cell) return;
+  if (!c.isTruncated) {
+    cell.innerHTML = `<span>${escapeHtml(c.allNamesText)}</span>`;
+    return;
+  }
+  if (expanded) {
+    cell.innerHTML =
+      `<span>${escapeHtml(c.allNamesText)}</span> ` +
+      `<button type="button" class="toggleNamesBtn text-blue-600 hover:underline whitespace-nowrap">收合 ▲</button>`;
+  } else {
+    cell.innerHTML =
+      `<span>${escapeHtml(c.shortNamesText)}...</span> ` +
+      `<button type="button" class="toggleNamesBtn text-blue-600 hover:underline whitespace-nowrap">顯示全部 ${c.nameCount} 個 ▼</button>`;
+  }
+  const btn = cell.querySelector(".toggleNamesBtn");
+  btn.addEventListener("click", () => renderNamesCell(cell, c, !expanded));
+}
+
 function renderTable() {
   productTbody.innerHTML = "";
-  productSummary.forEach((c) => {
+  productSummary.forEach((c, idx) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="border px-2 py-1">${escapeHtml(c.product)}</td>
-      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[200px]" title="${escapeHtml(c.displayNames)}">${escapeHtml(c.displayNames)}</td>
+      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[200px]" data-idx="${idx}"></td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(c.totalQty)}</td>
       <td class="border px-2 py-1 text-right">${formatMeters(c.totalMeters)}</td>
       <td class="border px-2 py-1 text-right">${formatMoney(c.totalAmount)}</td>
@@ -194,6 +224,7 @@ function renderTable() {
       <td class="border px-2 py-1 text-right">${formatPercent(c.marginRate)}</td>
     `;
     productTbody.appendChild(tr);
+    renderNamesCell(tr.querySelector(`td[data-idx="${idx}"]`), c, false);
   });
 
   if (productSummary.length) {
