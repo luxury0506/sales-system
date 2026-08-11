@@ -8,26 +8,21 @@
 </head>
 <body class="min-h-screen bg-slate-100">
   <div class="max-w-6xl mx-auto py-6 px-4 space-y-6">
-    <header class="flex items-center justify-between">
+    <header class="flex items-start justify-between flex-wrap gap-3">
       <div>
         <h1 class="text-2xl font-bold text-slate-800">產品系列別米數與銷售統計</h1>
         <p class="text-sm text-slate-600 mt-1">
           資料來源：<b>請先在主頁（index.html）上傳銷售檔並完成計算</b>。本頁會將不同長度規格但同屬性的物品編號（例：CFT-3-0A 與 CFT-3-0A-530M）自動合併加總。
         </p>
       </div>
-      <div class="flex gap-2">
-        <a
-          href="category.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-        >
-          🧩 改看大分類加總
-        </a>
-        <a
-          href="index.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
-        >
-          回到主頁
-        </a>
+      <div class="flex gap-2 flex-wrap">
+        <a href="index.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🏠 主頁</a>
+        <a href="pl.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📅 本月損益</a>
+        <a href="customer.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📊 客戶別統計</a>
+        <a href="cost.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">💹 進貨成本比較</a>
+        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500 text-white cursor-default">📦 產品別統計</span>
+        <a href="category.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧩 各類型加總</a>
+        <a href="pvc.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧮 PVC 成本設定</a>
       </div>
     </header>
 

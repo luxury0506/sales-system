@@ -11,79 +11,25 @@
 
 <body class="min-h-screen bg-slate-100">
   <div class="max-w-6xl mx-auto py-8 px-4 space-y-6">
-    <header>
-      <h1 class="text-2xl font-bold text-slate-800">
-        銷貨換算與成本試算（主頁面）
-      </h1>
-      <p class="text-sm text-slate-600 mt-1 leading-relaxed">
-        1️⃣ 上傳每日銷售明細 <br>
-        2️⃣ 輸入當月銀行匯率（台幣／人民幣） <br>
-        銷貨成本依內建的成本資料（由《大陸成富報價單(2022表格).xlsx》整理）＋匯率自動計算。<br>
-        每筆會顯示：<b>品名、銷貨量、換算米數、銷貨金額、銷貨成本、銷貨毛利</b>。
-      </p>
-    </header>
-
     <!-- 上方導航標籤 -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">每日銷貨換算與毛利試算</h1>
-        <p class="text-sm text-slate-600 mt-1">
-          上傳每日銷貨明細，系統自動換算米數、成本與毛利，並將結果提供給其他分析頁面使用。
+        <h1 class="text-2xl font-bold text-slate-800">每日銷貨換算與毛利試算（主頁面）</h1>
+        <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+          1️⃣ 上傳每日銷售明細　2️⃣ 輸入當月銀行匯率（台幣／人民幣），
+          系統自動換算米數、成本與毛利，並將結果提供給其他分析頁面使用。<br>
+          銷貨成本依內建的成本資料（由《大陸成富報價單(2022表格).xlsx》整理）＋匯率自動計算。
         </p>
       </div>
 
       <div class="flex gap-2 flex-wrap">
-        <!-- 連到本月損益總覽頁 -->
-        <a
-          href="pl.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          📅 本月損益
-        </a>
-
-        <!-- 連到客戶統計頁 -->
-        <a
-          href="customer.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          📊 客戶別統計
-        </a>
-
-        <!-- 連到進貨成本比較頁 -->
-        <a
-          href="cost.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          💹 進貨成本比較
-        </a>
-
-        <!-- 連到產品統計頁 -->
-        <a
-          href="product.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          📦 產品別統計
-        </a>
-
-        <!-- 連到各類型加總統計頁 -->
-        <a
-          href="category.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          🧩 各類型加總
-        </a>
-
-        <!-- 新增：連到 PVC 成本設定頁 -->
-        <a
-          href="pvc.html"
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-                 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-        >
-          🧮 PVC 成本設定
-        </a>
+        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500 text-white cursor-default">🏠 主頁</span>
+        <a href="pl.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📅 本月損益</a>
+        <a href="customer.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📊 客戶別統計</a>
+        <a href="cost.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">💹 進貨成本比較</a>
+        <a href="product.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📦 產品別統計</a>
+        <a href="category.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧩 各類型加總</a>
+        <a href="pvc.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧮 PVC 成本設定</a>
       </div>
     </div>
 
