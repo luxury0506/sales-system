@@ -120,11 +120,18 @@ function buildCategorySummary(rows) {
   const list = Array.from(map.values()).map((x) => {
     const marginRate = x.totalAmount > 0 ? x.totalProfit / x.totalAmount : 0;
     const codesArray = Array.from(x.codes).sort();
-    const joinedCodes =
-      codesArray.length > 6
-        ? codesArray.slice(0, 6).join("、 ") + `...（共 ${codesArray.length} 個編號）`
-        : codesArray.join("、 ");
-    return { ...x, marginRate, codeCount: codesArray.length, displayCodes: joinedCodes };
+    const isTruncated = codesArray.length > 6;
+    const shortCodes = isTruncated ? codesArray.slice(0, 6).join("、 ") : codesArray.join("、 ");
+    const allCodesText = codesArray.join("、 ");
+    return {
+      ...x,
+      marginRate,
+      codeCount: codesArray.length,
+      displayCodes: allCodesText, // 匯出 Excel 用，維持完整清單
+      shortCodesText: shortCodes,
+      allCodesText,
+      isTruncated,
+    };
   });
 
   // 依銷售額由高到低排序
@@ -132,14 +139,35 @@ function buildCategorySummary(rows) {
   return list;
 }
 
+// 渲染「涵蓋物品編號參考」這一格：預設精簡顯示，超過6個編號時
+// 附上「顯示全部」按鈕，點擊可展開完整清單／再點一次收合。
+function renderCodesCell(cell, c, expanded) {
+  if (!cell) return;
+  if (!c.isTruncated) {
+    cell.innerHTML = `<span>${escapeHtml(c.allCodesText)}</span>`;
+    return;
+  }
+  if (expanded) {
+    cell.innerHTML =
+      `<span>${escapeHtml(c.allCodesText)}</span> ` +
+      `<button type="button" class="toggleCodesBtn text-blue-600 hover:underline whitespace-nowrap">收合 ▲</button>`;
+  } else {
+    cell.innerHTML =
+      `<span>${escapeHtml(c.shortCodesText)}...</span> ` +
+      `<button type="button" class="toggleCodesBtn text-blue-600 hover:underline whitespace-nowrap">顯示全部 ${c.codeCount} 個 ▼</button>`;
+  }
+  const btn = cell.querySelector(".toggleCodesBtn");
+  btn.addEventListener("click", () => renderCodesCell(cell, c, !expanded));
+}
+
 function renderTable() {
   categoryTbody.innerHTML = "";
-  categorySummary.forEach((c) => {
+  categorySummary.forEach((c, idx) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="border px-2 py-1 font-medium">${escapeHtml(c.category)}</td>
       <td class="border px-2 py-1 text-right">${c.codeCount}</td>
-      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[220px]" title="${escapeHtml(c.displayCodes)}">${escapeHtml(c.displayCodes)}</td>
+      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[220px]" data-idx="${idx}"></td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(c.totalQty)}</td>
       <td class="border px-2 py-1 text-right">${formatMeters(c.totalMeters)}</td>
       <td class="border px-2 py-1 text-right">${formatMoney(c.totalAmount)}</td>
@@ -148,6 +176,7 @@ function renderTable() {
       <td class="border px-2 py-1 text-right">${formatPercent(c.marginRate)}</td>
     `;
     categoryTbody.appendChild(tr);
+    renderCodesCell(tr.querySelector(`td[data-idx="${idx}"]`), c, false);
   });
 
   // 合計列
