@@ -192,6 +192,39 @@
     <div id="costStatus" class="hint"></div>
   </div>
 
+  <!-- 一鍵存入 CFT-3／CFT-6 全部規格成本 -->
+  <div class="card">
+    <h2>🚀 一鍵存入 CFT-3／CFT-6 全部規格成本</h2>
+    <p class="hint">
+      比照《2604銷售分析.xlsx》PVC原料成本工作表的公式，用上面「PVC 粒 (元/Kg)」的單價，
+      把 CFT-3／CFT-6 全部 AWG／內徑規格的每米成本一次算好存起來（不套用「廢料 (%)」，公式本身已含耗損係數1.3）。<br>
+      公式：外徑 = 內徑 ＋ 壁厚 × 2　｜　每米重(g) = (外徑－壁厚) × 壁厚 × 3.14 × 1.3　｜　每米成本 = 每米重(g) ÷ 1000 × PVC粒單價(元/Kg)
+    </p>
+    <button id="bulkFillBtn">🚀 一鍵存入全部規格成本</button>
+    <div id="bulkFillStatus" class="hint"></div>
+  </div>
+
+  <!-- PVC 每米成本速查表 -->
+  <div class="card">
+    <h2>📋 PVC 每米成本速查表</h2>
+    <p class="hint">
+      速查用，不會存入系統；跟隨上面「PVC 粒 (元/Kg)」即時重新計算，如同 Excel 改一格全表連動。
+    </p>
+    <div style="margin-bottom:8px;">
+      <button id="tabCFT3" type="button">CFT-3（CFT-300）</button>
+      <button id="tabCFT6" type="button">CFT-6（CFT-600）</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>規格 / AWG</th><th>內徑 (mm)</th><th>壁厚 (mm)</th>
+          <th>外徑 (mm)</th><th>每米重 (g)</th><th>每米成本 (元/M)</th><th>305米成本 (元)</th>
+        </tr>
+      </thead>
+      <tbody id="specTableBody"></tbody>
+    </table>
+  </div>
+
   <!-- 儲存到 PVC 成本表 -->
   <div class="card">
     <h2>將本規格儲存為 PVC 成本</h2>
