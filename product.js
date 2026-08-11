@@ -75,7 +75,7 @@ function extractMmInfo(name) {
 }
 
 function extractProductSeries(row) {
-  let code = (row.itemCode || "").trim();
+  let code = String(row.itemCode || "").trim();
   if (!code) return "未填寫物品編號";
   const name = (row.name || "").trim();
   
