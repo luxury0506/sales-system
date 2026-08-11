@@ -9,9 +9,9 @@
   <div class="max-w-4xl mx-auto py-6 px-4 space-y-6">
     <header class="flex items-start justify-between flex-wrap gap-3">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">📅 本月損益總覽</h1>
+        <h1 class="text-2xl font-bold text-slate-800">📅 損益總覽</h1>
         <p class="text-sm text-slate-600 mt-1">
-          在主頁上傳銷貨明細、算完成本毛利後，按「✅ 記錄這批明細」存起來的每日合計，都會顯示在這裡。<br>
+          在主頁上傳銷貨明細、算完成本毛利後，按「✅ 記錄這批明細」存起來的每日合計，全部日期都會列在這裡（不分月份）。<br>
           資料來源：localStorage（跟主頁共用同一份紀錄，不用重新上傳）。
         </p>
       </div>
@@ -27,12 +27,7 @@
     </header>
 
     <section class="bg-white shadow rounded-xl p-5 space-y-4">
-      <div class="flex flex-wrap items-center gap-3 text-sm">
-        <label class="text-slate-700">檢視月份</label>
-        <input id="plMonthSelect" type="month" class="border rounded px-2 py-1 text-sm" />
-      </div>
-
-      <div id="plMonthBanner" class="rounded-lg p-4 text-center font-semibold text-lg"></div>
+      <div id="plBanner" class="rounded-lg p-4 text-center font-semibold text-lg"></div>
 
       <div class="overflow-auto">
         <table class="min-w-full text-xs text-left border">
@@ -46,7 +41,7 @@
               <th class="border px-2 py-1 text-center">操作</th>
             </tr>
           </thead>
-          <tbody id="plMonthTbody" class="divide-y"></tbody>
+          <tbody id="plTbody" class="divide-y"></tbody>
         </table>
       </div>
     </section>
