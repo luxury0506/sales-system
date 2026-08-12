@@ -64,9 +64,10 @@ document.addEventListener("DOMContentLoaded", () => {
       totalProfit += r.profit || 0;
 
       const marginRate = r.amount > 0 ? (r.profit / r.amount) * 100 : 0;
+      const displayDate = r.date.endsWith("-00") ? `${r.month}（整月）` : r.date;
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td class="border px-2 py-1">${r.date}</td>
+        <td class="border px-2 py-1">${displayDate}</td>
         <td class="border px-2 py-1 text-right">${formatMoney(r.amount)}</td>
         <td class="border px-2 py-1 text-right">${formatMoney(r.cost)}</td>
         <td class="border px-2 py-1 text-right ${r.profit < 0 ? "text-red-600" : ""}">${formatMoney(r.profit)}</td>
@@ -79,7 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="border px-2 py-3 text-center text-slate-400">還沒有任何記錄，請先到主頁上傳明細算完後按「✅ 記錄這批明細」。</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="border px-2 py-3 text-center text-slate-400">還沒有任何記錄，請先到主頁上傳整月明細算完後按「✅ 記錄這個月」。</td></tr>`;
     }
 
     tbody.querySelectorAll(".plDeleteBtn").forEach((btn) => {

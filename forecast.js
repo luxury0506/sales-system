@@ -1,14 +1,15 @@
 // forecast.js
-// 讀取 localStorage key "itemMonthlyUsage"（跟主頁「✅ 記錄這批明細」寫入的是同一份資料），
-// 結構：{ "2026-08": { "2026-08-10": { "FSG-3-01": {qty, meters, name}, ... }, ... }, ... }
+// 讀取 localStorage key "itemMonthlyUsage"（跟主頁「✅ 記錄這個月」寫入的是同一份資料），
+// 結構：{ "2026-08": { "2026-08-00": { "FSG-3-01": {qty, meters, name}, ... } }, ... }
+// （"2026-08-00" 代表整月合計的固定key，一個月一筆，不用逐日累積）
 // 計算：建議月叫貨量 = 近3個月平均用量 × 70% ＋ 全部歷史月平均用量 × 30%
-// 需要累積至少 30 天的記錄資料才會顯示估算結果。
+// 需要累積至少 1 個月的記錄資料才會顯示估算結果。
 
 const ITEM_STORAGE_KEY = "itemMonthlyUsage";
 const RECENT_MONTHS_COUNT = 3;
 const RECENT_WEIGHT = 0.7;
 const HISTORY_WEIGHT = 0.3;
-const MIN_DAYS_REQUIRED = 30;
+const MIN_MONTHS_REQUIRED = 1;
 
 function escapeHtml(text) {
   if (text == null) return "";
@@ -41,16 +42,16 @@ function loadItemUsage() {
   }
 }
 
-// 把 { month: { date: { itemCode: {qty,meters,name} } } }
-// 彙總成 { month: { itemCode: {qty,meters,name} } }，並統計總天數。
+// 把 { month: { 記錄key: { itemCode: {qty,meters,name} } } }
+// 彙總成 { month: { itemCode: {qty,meters,name} } }。
+// 記錄key可能是整月合計(YYYY-MM-00)，也可能是舊版逐日記錄留下的日期，
+// 這裡不管是哪種都直接加總，兩種資料格式都能正確彙總。
 function aggregateByMonth(all) {
   const monthly = {};
-  let totalDays = 0;
 
   Object.keys(all).forEach((month) => {
     const dates = all[month] || {};
     const dateKeys = Object.keys(dates);
-    totalDays += dateKeys.length;
 
     if (!monthly[month]) monthly[month] = {};
 
@@ -68,7 +69,7 @@ function aggregateByMonth(all) {
     });
   });
 
-  return { monthly, totalDays };
+  return { monthly };
 }
 
 function computeForecast(monthly) {
@@ -176,26 +177,27 @@ function downloadExcel() {
 document.addEventListener("DOMContentLoaded", () => {
   const statusEl = document.getElementById("status");
   const all = loadItemUsage();
-  const { monthly, totalDays } = aggregateByMonth(all);
+  const { monthly } = aggregateByMonth(all);
+  const monthCount = Object.keys(monthly).length;
 
-  if (totalDays < MIN_DAYS_REQUIRED) {
+  if (monthCount < MIN_MONTHS_REQUIRED) {
     statusEl.textContent =
-      `目前累積了 ${totalDays} 天的記錄資料，還需要至少 ${MIN_DAYS_REQUIRED} 天才會顯示估算結果` +
-      `（請持續在主頁上傳明細後按「✅ 記錄這批明細」，累積越多天資料越準）。`;
+      `目前還沒有已記錄的整月資料，請先到主頁上傳一整個月的銷貨明細並按「✅ 記錄這個月」，` +
+      `累積至少 ${MIN_MONTHS_REQUIRED} 個月才會顯示估算結果（月數越多，近3月/全歷史的比較越準）。`;
     return;
   }
 
   forecastResults = computeForecast(monthly);
 
   if (!forecastResults.length) {
-    statusEl.textContent = "已有足夠天數的記錄，但目前沒有任何品項用量資料。";
+    statusEl.textContent = "已有記錄的月份，但目前沒有任何品項用量資料。";
     return;
   }
 
-  const monthCount = Object.keys(monthly).length;
   statusEl.textContent =
-    `已累積 ${totalDays} 天、涵蓋 ${monthCount} 個月的記錄資料，共 ${forecastResults.length} 個品項。` +
-    `建議月叫貨量 = 近${RECENT_MONTHS_COUNT}個月平均 × ${RECENT_WEIGHT * 100}% ＋ 全歷史平均 × ${HISTORY_WEIGHT * 100}%。`;
+    `已累積 ${monthCount} 個月的記錄資料，共 ${forecastResults.length} 個品項。` +
+    `建議月叫貨量 = 近${RECENT_MONTHS_COUNT}個月平均 × ${RECENT_WEIGHT * 100}% ＋ 全歷史平均 × ${HISTORY_WEIGHT * 100}%` +
+    (monthCount < RECENT_MONTHS_COUNT ? `（目前月數還不到${RECENT_MONTHS_COUNT}個月，近期平均會用現有的全部月份計算）。` : "。");
 
   renderTable();
 
