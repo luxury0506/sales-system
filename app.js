@@ -301,6 +301,92 @@ function getYunlinUnitPrice(itemCode, specMm, name) {
 }
 
 /***********************
+ * PET／AIS／AISC／YG（雲林電子，不吃匯率）
+ * 編碼規則（由實際物品編號範例確認）：
+ *   PET-032 = 3.2mm、AIS-254R = 25.4mm（R=顏色字尾，比對前先去掉）
+ *   規則：去掉可能的顏色字尾字母，剩下的數字 ÷10 = mm
+ *   例：PET-032 -> 032 -> 3.2mm；AIS-127 -> 127 -> 12.7mm
+ * YG 的實際編碼規則尚未經過真實範例確認，先比照同一家供應商(雲林電子)
+ * 的 PET/AIS 編碼慣例套用，如果之後發現對不上，要再調整。
+ ************************/
+function parseTenthsMmCode(specToken) {
+  if (!specToken) return null;
+  // 去掉尾端顏色／材質字母（例："254R" -> "254"）
+  const stripped = specToken.replace(/[A-Za-z]+$/, "");
+  if (!/^\d+$/.test(stripped)) return null;
+  const v = parseInt(stripped, 10) / 10;
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+function getMmTableUnitPrice(itemCode, prefix, table) {
+  if (!itemCode || typeof table === "undefined") return null;
+  const code = itemCode.toString().trim().toUpperCase();
+  const parts = code.split("-");
+  if (parts.length < 2 || parts[0] !== prefix) return null;
+
+  const mm = parseTenthsMmCode(parts[1]);
+  if (mm == null) return null;
+
+  const mmKey = String(mm);
+  const row = table[mmKey];
+  if (row == null) return null;
+
+  // YG_TABLE / PET_TABLE / AIS_TABLE / AISC_TABLE 都是「mm -> 價格數字」，
+  // 直接回傳；如果是 {cost:...} 這種物件形式（像 HTK_TABLE）在這裡不適用。
+  const price = typeof row === "number" ? row : null;
+  return price != null && price > 0 ? price : null;
+}
+
+function getPetUnitPrice(itemCode) {
+  if (typeof PET_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "PET", PET_TABLE);
+}
+
+function getAisUnitPrice(itemCode) {
+  if (typeof AIS_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "AIS", AIS_TABLE);
+}
+
+function getAiscUnitPrice(itemCode) {
+  if (typeof AISC_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "AISC", AISC_TABLE);
+}
+
+function getYgUnitPrice(itemCode) {
+  if (typeof YG_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "YG", YG_TABLE);
+}
+
+/***********************
+ * HTK／ATM（雲林電子，不吃匯率）
+ * 實際銷貨編號跟 PET/AIS 同一套「PREFIX-XXX」(mm×10) 規則，
+ * 例：HTK-032 = 3.2mm、ATM-080 = 8.0mm。
+ ************************/
+function getHtkUnitPrice(itemCode) {
+  if (typeof HTK_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "HTK", HTK_TABLE);
+}
+
+function getAtmUnitPrice(itemCode) {
+  if (typeof ATM_TABLE === "undefined") return null;
+  return getMmTableUnitPrice(itemCode, "ATM", ATM_TABLE);
+}
+
+/***********************
+ * 統一入口：依序試 PET / AIS / AISC / YG / HTK / ATM
+ ************************/
+function getOtherHeatShrinkUnitPrice(itemCode) {
+  return (
+    getPetUnitPrice(itemCode) ??
+    getAisUnitPrice(itemCode) ??
+    getAiscUnitPrice(itemCode) ??
+    getYgUnitPrice(itemCode) ??
+    getHtkUnitPrice(itemCode) ??
+    getAtmUnitPrice(itemCode)
+  );
+}
+
+/***********************
  * 從 COST_MAP 取順博 / 瑞普的「每米人民幣單價」
  ************************/
 function getBasePriceFromCostTable(mmKey, supplier) {
@@ -835,7 +921,7 @@ function recalcAndRender() {
 
   if (!hasRate) {
     statusEl.textContent =
-      "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮與 PVC 不受影響）。";
+      "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮、PET/AIS/AISC/YG/HTK/ATM 與 PVC 不受影響）。";
   }
 
   processedRows = baseRows.map((row) => {
@@ -861,6 +947,12 @@ function recalcAndRender() {
         unitPrice = yunlinUnit;
         cost = unitPrice * row.meters;
       } else {
+        // 1.5️⃣ 其他熱縮系列：PET / AIS / AISC / YG / HTK / ATM（不吃匯率）
+        const otherUnit = getOtherHeatShrinkUnitPrice(row.itemCode);
+        if (otherUnit != null) {
+          unitPrice = otherUnit;
+          cost = unitPrice * row.meters;
+        } else {
         // 2️⃣ 順博 / 瑞普（吃匯率）
         const supplier = getSupplierFromRow(row);
         const mmKey = row.specMm != null ? String(row.specMm) : null;
@@ -891,6 +983,7 @@ function recalcAndRender() {
             unitPrice = basePrice * rateVal; // 台幣 / 米
             cost = unitPrice * row.meters;
           }
+        }
         }
       }
     }
