@@ -74,7 +74,31 @@ function extractMmInfo(name) {
   return { specMm, cutMm };
 }
 
+// 少數不遵循一般規則的特殊代號／品名，先個別對應到正確的產品系列，
+// 再交給下面的一般規則處理。有新的例外請直接加在這裡。
+const SERIES_CODE_ALIAS_MAP = {
+  "FSG-3-042-028M": "FSG-3-04",
+  "H12": "H120",
+  "H15CB": "H150CB",
+  "HST-046": "HST-045",
+  "ATM-012BK": "ATM-012",
+};
+const SERIES_NAME_ALIAS_MAP = {
+  "矽套管 3.7mm* 38mm": "FSG-3-035",
+};
+
+function applyKnownSeriesAlias(row) {
+  const code = (row.itemCode || "").toString().trim();
+  if (code && SERIES_CODE_ALIAS_MAP[code]) return SERIES_CODE_ALIAS_MAP[code];
+  const name = (row.name || "").toString().trim();
+  if (name && SERIES_NAME_ALIAS_MAP[name]) return SERIES_NAME_ALIAS_MAP[name];
+  return null;
+}
+
 function extractProductSeries(row) {
+  const alias = applyKnownSeriesAlias(row);
+  if (alias) return alias;
+
   let code = String(row.itemCode || "").trim();
   if (!code) return "未填寫物品編號";
   const name = (row.name || "").trim();
