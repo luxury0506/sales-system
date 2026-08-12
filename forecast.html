@@ -2,17 +2,18 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>產品系列別統計</title>
+  <title>叫貨量預估</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="min-h-screen bg-slate-100">
   <div class="max-w-6xl mx-auto py-6 px-4 space-y-6">
     <header class="flex items-start justify-between flex-wrap gap-3">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">產品系列別米數與銷售統計</h1>
+        <h1 class="text-2xl font-bold text-slate-800">📈 叫貨量預估</h1>
         <p class="text-sm text-slate-600 mt-1">
-          資料來源：<b>請先在主頁（index.html）上傳銷售檔並完成計算</b>。本頁會將不同長度規格但同屬性的物品編號（例：CFT-3-0A 與 CFT-3-0A-530M）自動合併加總。
+          依照主頁「✅ 記錄這批明細」累積下來的每日品項用量，自動估算每個品項下個月建議叫貨量。<br>
+          計算方式：<b>建議月叫貨量 = 近3個月平均用量 × 70% ＋ 全部歷史月平均用量 × 30%</b>（近期趨勢權重較高）。<br>
+          需要累積至少 <b>30 天</b>的記錄資料才會顯示估算結果，資料越多越準。
         </p>
       </div>
       <div class="flex gap-2 flex-wrap">
@@ -20,9 +21,9 @@
         <a href="pl.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📅 本月損益</a>
         <a href="customer.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📊 客戶別統計</a>
         <a href="cost.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">💹 進貨成本比較</a>
-        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500 text-white cursor-default">📦 產品別統計</span>
+        <a href="product.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📦 產品別統計</a>
         <a href="category.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧩 各類型加總</a>
-        <a href="forecast.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📈 叫貨量預估</a>
+        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500 text-white cursor-default">📈 叫貨量預估</span>
         <a href="pvc.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧮 PVC 成本設定</a>
       </div>
     </header>
@@ -32,52 +33,33 @@
 
       <div class="flex items-center justify-end gap-2">
         <button
-          id="downloadProductExcel"
+          id="downloadForecastExcel"
           class="hidden inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600"
         >
-          匯出產品統計 Excel
+          匯出叫貨量預估 Excel
         </button>
       </div>
 
-      <!-- 產品彙總表 -->
-      <div class="overflow-auto max-h-[480px] border rounded-lg">
+      <div class="overflow-auto max-h-[600px] border rounded-lg">
         <table class="min-w-full text-xs text-left">
           <thead class="bg-slate-50 sticky top-0">
             <tr>
-              <th class="border px-2 py-1">產品系列 (合併後)</th>
-              <th class="border px-2 py-1">涵蓋之品名參考</th>
-              <th class="border px-2 py-1 text-right">總計數量</th>
-              <th class="border px-2 py-1 text-right">總計米數</th>
-              <th class="border px-2 py-1 text-right">銷售總額</th>
-              <th class="border px-2 py-1 text-right">成本總額</th>
-              <th class="border px-2 py-1 text-right">總毛利</th>
-              <th class="border px-2 py-1 text-right">毛利率</th>
+              <th class="border px-2 py-1">物品編號</th>
+              <th class="border px-2 py-1">品名</th>
+              <th class="border px-2 py-1 text-right">近3月平均(數量)</th>
+              <th class="border px-2 py-1 text-right">全歷史平均(數量)</th>
+              <th class="border px-2 py-1 text-right">建議月叫貨量(數量)</th>
+              <th class="border px-2 py-1 text-right">建議月叫貨量(米數)</th>
+              <th class="border px-2 py-1 text-right">已有月份數</th>
             </tr>
           </thead>
-          <tbody id="productTbody" class="divide-y"></tbody>
+          <tbody id="forecastTbody"></tbody>
         </table>
       </div>
-    </section>
-
-    <!-- 圖表 -->
-    <section class="bg-white shadow rounded-xl p-4 space-y-4">
-      <h2 class="text-sm font-semibold text-slate-700">產品系列總米數排行榜</h2>
-      <div class="flex items-center gap-2 text-xs mb-2">
-        <label for="chartLimitSelect" class="text-slate-600">顯示產品數：</label>
-        <select
-          id="chartLimitSelect"
-          class="border rounded px-2 py-1 text-xs text-slate-700"
-        >
-          <option value="10">Top 10</option>
-          <option value="20">Top 20</option>
-          <option value="all">全部</option>
-        </select>
-      </div>
-      <canvas id="metersChart" height="160"></canvas>
     </section>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="product.js"></script>
+  <script src="forecast.js"></script>
 </body>
 </html>

@@ -985,6 +985,18 @@ function renderTable() {
     updatedAt: new Date().toISOString(),
   };
 
+  // 依物品編號彙總這批明細的用量，供「叫貨量預估」功能記錄歷史用。
+  const itemBreakdown = {};
+  processedRows.forEach((row) => {
+    const code = row.itemCode || "未填寫物品編號";
+    if (!itemBreakdown[code]) {
+      itemBreakdown[code] = { qty: 0, meters: 0, name: row.name || "" };
+    }
+    itemBreakdown[code].qty += row.qty || 0;
+    itemBreakdown[code].meters += row.meters || 0;
+  });
+  window.__currentFileItemBreakdown = itemBreakdown;
+
   tableContainer.classList.remove("hidden");
   downloadBtn.classList.remove("hidden");
 }
@@ -1001,6 +1013,7 @@ function clearAnalysisData() {
   baseRows = [];
   processedRows = [];
   window.__currentFileTotals = null;
+  window.__currentFileItemBreakdown = null;
   resultTbody.innerHTML = "";
   tableContainer.classList.add("hidden");
   downloadBtn.classList.add("hidden");

@@ -29,6 +29,7 @@
         <a href="cost.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">💹 進貨成本比較</a>
         <a href="product.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📦 產品別統計</a>
         <a href="category.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧩 各類型加總</a>
+        <a href="forecast.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">📈 叫貨量預估</a>
         <a href="pvc.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200">🧮 PVC 成本設定</a>
       </div>
     </div>
@@ -259,9 +260,29 @@
           };
           saveAll(all);
 
+          // 同時把每個品項的用量記錄到 itemMonthlyUsage，供「叫貨量預估」頁面使用。
+          const itemBreakdown = window.__currentFileItemBreakdown;
+          if (itemBreakdown) {
+            const ITEM_STORAGE_KEY = "itemMonthlyUsage";
+            let itemAll = {};
+            try {
+              const raw = localStorage.getItem(ITEM_STORAGE_KEY);
+              itemAll = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+              console.error("讀取品項用量歷史失敗：", e);
+            }
+            if (!itemAll[month]) itemAll[month] = {};
+            itemAll[month][date] = itemBreakdown;
+            try {
+              localStorage.setItem(ITEM_STORAGE_KEY, JSON.stringify(itemAll));
+            } catch (e) {
+              console.error("儲存品項用量歷史失敗：", e);
+            }
+          }
+
           recordStatus.textContent =
             `已記錄 ${date}：銷貨金額 ${formatMoney(totals.totalAmount)}、毛利 ${formatMoney(totals.totalProfit)}。` +
-            `（到「本月損益總覽」頁面可以看完整月度累計）`;
+            `（到「本月損益總覽」頁面可以看完整月度累計，「📈 叫貨量預估」頁面可以看品項用量趨勢）`;
         });
       }
     })();
