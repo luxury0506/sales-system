@@ -42,8 +42,98 @@ function loadItemUsage() {
   }
 }
 
+// ============================================================
+// 以下的系列判斷邏輯跟 product.js 保持一致（同一套規則、同一份例外對照表），
+// 目的是把同系列不同顏色/長度變體的物品編號合併成一個系列再加總用量，
+// 這樣「FSG-3-035 這個系列總共要叫多少」才看得出正確答案，
+// 不會被拆成 FSG-3-035、FSG-3-035B、FSG-3-035R...一堆分開的小數字。
+// product.js 那邊如果有更新這套規則，這裡也要同步更新。
+// ============================================================
+function extractMmInfo(name) {
+  if (!name) return { specMm: null, cutMm: null };
+  let specMm = null;
+  let cutMm = null;
+  let m = /mm\s*[x*]\s*(\d+(?:\.\d+)?)/i.exec(name);
+  if (m) {
+    cutMm = parseFloat(m[1]);
+  } else {
+    m = /[x*]\s*(\d+(?:\.\d+)?)(?=\s*mm\b)/i.exec(name);
+    if (m) cutMm = parseFloat(m[1]);
+  }
+  return { specMm, cutMm };
+}
+
+const SERIES_CODE_ALIAS_MAP = {
+  "FSG-3-042-028M": "FSG-3-04",
+  "H12": "H120",
+  "H15CB": "H150CB",
+  "HST-046": "HST-045",
+  "ATM-012BK": "ATM-012",
+};
+const SERIES_NAME_ALIAS_MAP = {
+  "矽套管 3.7mm* 38mm": "FSG-3-035",
+};
+
+function applyKnownSeriesAlias(row) {
+  const code = (row.itemCode || "").toString().trim();
+  if (code && SERIES_CODE_ALIAS_MAP[code]) return SERIES_CODE_ALIAS_MAP[code];
+  const name = (row.name || "").toString().trim();
+  if (name && SERIES_NAME_ALIAS_MAP[name]) return SERIES_NAME_ALIAS_MAP[name];
+  return null;
+}
+
+function extractProductSeries(row) {
+  const alias = applyKnownSeriesAlias(row);
+  if (alias) return alias;
+
+  let code = String(row.itemCode || "").trim();
+  if (!code) return "未填寫物品編號";
+  const name = (row.name || "").trim();
+
+  if (/[0-9]+[Mm]$/.test(code)) {
+    return code.replace(/[-_\s]*\d+(?:\.\d+)?(?:[Mm])?$/, "");
+  }
+  if (/[A-Za-z]M$/.test(code)) {
+    code = code.replace(/M$/, "");
+  }
+
+  const segments = code.split(/[-_]/);
+  if (segments.length > 1) {
+    const last = segments[segments.length - 1];
+    const lastNumMatch = last.match(/^(\d+(?:\.\d+)?)([A-Za-z]*)$/);
+
+    if (lastNumMatch) {
+      const numStr = lastNumMatch[1];
+      const letters = lastNumMatch[2];
+      let shouldCut = false;
+
+      const info = extractMmInfo(name);
+      if (info.cutMm != null && parseFloat(numStr) === info.cutMm) {
+        shouldCut = true;
+      }
+      const explicitLengths = ['115', '053', '200', '530', '1000', '1650'];
+      if (explicitLengths.includes(numStr)) {
+        shouldCut = true;
+      }
+      if (letters === "" && numStr.length >= 3 && !numStr.startsWith("0")) {
+        shouldCut = true;
+      }
+
+      if (shouldCut) {
+        segments.pop();
+        if (letters) {
+          segments[segments.length - 1] += letters;
+        }
+        return segments.join("-");
+      }
+    }
+  }
+  return code;
+}
+
+
 // 把 { month: { 記錄key: { itemCode: {qty,meters,name} } } }
-// 彙總成 { month: { itemCode: {qty,meters,name} } }。
+// 依「產品系列」（不是原始物品編號）彙總成 { month: { series: {qty,meters,name} } }。
 // 記錄key可能是整月合計(YYYY-MM-00)，也可能是舊版逐日記錄留下的日期，
 // 這裡不管是哪種都直接加總，兩種資料格式都能正確彙總。
 function aggregateByMonth(all) {
@@ -59,12 +149,13 @@ function aggregateByMonth(all) {
       const items = dates[date] || {};
       Object.keys(items).forEach((code) => {
         const rec = items[code];
-        if (!monthly[month][code]) {
-          monthly[month][code] = { qty: 0, meters: 0, name: rec.name || "" };
+        const series = extractProductSeries({ itemCode: code, name: rec.name || "" });
+        if (!monthly[month][series]) {
+          monthly[month][series] = { qty: 0, meters: 0, name: rec.name || "" };
         }
-        monthly[month][code].qty += rec.qty || 0;
-        monthly[month][code].meters += rec.meters || 0;
-        if (rec.name) monthly[month][code].name = rec.name;
+        monthly[month][series].qty += rec.qty || 0;
+        monthly[month][series].meters += rec.meters || 0;
+        if (rec.name) monthly[month][series].name = rec.name;
       });
     });
   });
@@ -157,7 +248,7 @@ function renderTable() {
 function downloadExcel() {
   if (!forecastResults.length) return;
   const aoa = [
-    ["物品編號", "品名", "近3月平均(數量)", "全歷史平均(數量)", "建議月叫貨量(數量)", "建議月叫貨量(米數)", "已有月份數"],
+    ["產品系列", "品名", "近3月平均(數量)", "全歷史平均(數量)", "建議月叫貨量(數量)", "建議月叫貨量(米數)", "已有月份數"],
     ...forecastResults.map((r) => [
       r.code,
       r.name,
