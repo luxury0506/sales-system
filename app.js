@@ -164,31 +164,38 @@ function extractMmInfo(name) {
   let specMm = null;
   let cutMm = null;
 
-  // ① 先抓「xx mm」
-  const mmRegex = /([\d\.]+)\s*mm/gi;
-  let mmMatch = mmRegex.exec(name);
+  // 先找「x」或「*」分隔符，把品名拆成「直徑部分」跟「長度部分」，
+  // 例如 "3.0mm* 2300mm" -> 前段"3.0mm"、後段"2300mm"。
+  // 這樣即使前段漏打"mm"（例："3.0* 2300mm"），也能正確抓到直徑是3.0，
+  // 不會被後面的長度數字"2300"誤判成直徑。
+  const sepIdx = name.search(/[x*]/i);
+  if (sepIdx !== -1) {
+    const beforePart = name.slice(0, sepIdx);
+    const afterPart = name.slice(sepIdx + 1);
 
-  if (mmMatch) {
-    const v = parseFloat(mmMatch[1]);
-    if (!isNaN(v)) {
-      specMm = v;
+    // 前段：抓最後一個數字，"mm"可有可無
+    const diaMatch = /([\d.]+)\s*(?:mm)?\s*$/i.exec(beforePart.trim());
+    if (diaMatch) {
+      const v = parseFloat(diaMatch[1]);
+      if (!isNaN(v)) specMm = v;
+    }
+
+    // 後段：抓第一個「數字+mm」當裁切長度
+    const cutMatch = /([\d.]+)\s*mm/i.exec(afterPart);
+    if (cutMatch) {
+      const v = parseFloat(cutMatch[1]);
+      if (!isNaN(v)) cutMm = v;
     }
   }
 
-  // 裁切長度：  e.g. "2.0mm * 180mm" 或 "2.0mm x 180mm"
-  let m = /mm\s*[x*]\s*(\d+(?:\.\d+)?)/i.exec(name);
-  if (m) {
-    const v = parseFloat(m[1]);
-    if (!isNaN(v)) {
-      cutMm = v;
-    }
-  } else {
-    m = /[x*]\s*(\d+(?:\.\d+)?)(?=\s*mm\b)/i.exec(name);
-    if (m) {
-      const v = parseFloat(m[1]);
-      if (!isNaN(v)) {
-        cutMm = v;
-      }
+  // 沒有分隔符時，才退回「抓第一個 XXmm」的舊邏輯；
+  // 有分隔符但前段抓不到數字（例如AWG式代號），交給下面的AWG換算處理，
+  // 不要在整個品名裡亂抓，否則可能又抓到後段的裁切長度。
+  if (specMm == null && sepIdx === -1) {
+    const mmMatch = /([\d.]+)\s*mm/i.exec(name);
+    if (mmMatch) {
+      const v = parseFloat(mmMatch[1]);
+      if (!isNaN(v)) specMm = v;
     }
   }
 
@@ -314,7 +321,11 @@ function parseTenthsMmCode(specToken) {
   // 去掉尾端顏色／材質字母（例："254R" -> "254"）
   const stripped = specToken.replace(/[A-Za-z]+$/, "");
   if (!/^\d+$/.test(stripped)) return null;
-  const v = parseInt(stripped, 10) / 10;
+  // 標準格式是3碼（mm×10），但實務上偶爾會把尾端的0省略掉，
+  // 例如 PET-16 其實代表 PET-160（=16.0mm），不是 1.6mm。
+  // 所以不足3碼時，先在後面補0再除以10。
+  const padded = stripped.length < 3 ? stripped.padEnd(3, "0") : stripped;
+  const v = parseInt(padded, 10) / 10;
   return Number.isFinite(v) && v > 0 ? v : null;
 }
 
@@ -368,8 +379,20 @@ function getHtkUnitPrice(itemCode) {
 }
 
 function getAtmUnitPrice(itemCode) {
-  if (typeof ATM_TABLE === "undefined") return null;
-  return getMmTableUnitPrice(itemCode, "ATM", ATM_TABLE);
+  // ATM 系列跟 PET/AIS/HTK 不一樣：代號是「直接整數mm」，不是mm×10。
+  // 由實際品名對照確認：ATM-012BK = 12.0mm（不是1.2mm）、ATM-022BK = 22.0mm。
+  if (typeof ATM_TABLE === "undefined" || !itemCode) return null;
+  const code = itemCode.toString().trim().toUpperCase();
+  const parts = code.split("-");
+  if (parts.length < 2 || parts[0] !== "ATM") return null;
+
+  const stripped = parts[1].replace(/[A-Za-z]+$/, "");
+  if (!/^\d+$/.test(stripped)) return null;
+  const mm = parseInt(stripped, 10);
+  if (!Number.isFinite(mm) || mm <= 0) return null;
+
+  const row = ATM_TABLE[String(mm)];
+  return typeof row === "number" && row > 0 ? row : null;
 }
 
 /***********************
@@ -903,6 +926,17 @@ if (pvcBulkFillBtn) {
 }
 
 
+// 成本表(順博/瑞普)裡沒有登記、但確認要比照鄰近規格計價的直徑對應。
+// 例：FSG-2-017(1.7mm) 比照 FSG-2-015(1.5mm) 計價。
+// 有新的例外請直接加在這裡。
+const MM_SPEC_COST_ALIAS = {
+  "1.7": "1.5",  // FSG-2-017 -> FSG-2-015
+  "3.2": "3",    // FSG-3-032 -> FSG-3-03
+  "3.7": "3.5",  // FSG-3-035-038M(品名3.7mm) -> FSG-3-035
+  "4.3": "4.5",  // HST-043 -> HST-045
+  "4.6": "4.5",  // HST-046系列 -> HST-045
+};
+
 /***********************
  * 主計算：
  *  0) PVC 成本（CFT-3 / CFT-6，不吃匯率，來自 PVC_STORAGE）
@@ -955,7 +989,10 @@ function recalcAndRender() {
         } else {
         // 2️⃣ 順博 / 瑞普（吃匯率）
         const supplier = getSupplierFromRow(row);
-        const mmKey = row.specMm != null ? String(row.specMm) : null;
+        let mmKey = row.specMm != null ? String(row.specMm) : null;
+        if (mmKey != null && MM_SPEC_COST_ALIAS[mmKey] != null) {
+          mmKey = MM_SPEC_COST_ALIAS[mmKey];
+        }
 
         if (supplier && mmKey && hasRate) {
           let basePrice = getBasePriceFromCostTable(mmKey, supplier);
