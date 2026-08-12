@@ -452,31 +452,71 @@ function getBasePriceFromCostTable(mmKey, supplier) {
 
 /***********************
  * PVC 成本（不吃匯率），由 pvc.html 設定
- * localStorage 結構：
+ * localStorage 結構（依顏色分開儲存）：
  * {
- *   cft3: { "8.380": 單價元/M, ... },
- *   cft6: { "10.000": 單價元/M, ... },
+ *   cft3: {
+ *     black:       { "8.380": 單價元/M, ... },
+ *     transparent: { "8.380": 單價元/M, ... },
+ *     color:       { "8.380": 單價元/M, ... }
+ *   },
+ *   cft6: { black: {...}, transparent: {...}, color: {...} },
  *   updatedAt: ISOString
  * }
  ************************/
 const PVC_STORAGE_KEY = "PVC_COST_TABLE";
-let PVC_COST_CFT3 = {};
-let PVC_COST_CFT6 = {};
+let PVC_COST_CFT3 = { black: {}, transparent: {}, color: {} };
+let PVC_COST_CFT6 = { black: {}, transparent: {}, color: {} };
+
+function normalizePvcSeriesTable(raw) {
+  // 兼容舊格式（沒分顏色、mm直接對成本的扁平物件）：當作黑色資料處理。
+  if (!raw) return { black: {}, transparent: {}, color: {} };
+  const looksNested =
+    raw.black || raw.transparent || raw.color;
+  if (looksNested) {
+    return {
+      black: raw.black || {},
+      transparent: raw.transparent || {},
+      color: raw.color || {},
+    };
+  }
+  return { black: raw, transparent: {}, color: {} };
+}
 
 function loadPvcCostFromLocalStorage() {
   try {
     const raw = localStorage.getItem(PVC_STORAGE_KEY);
     if (!raw) return;
     const obj = JSON.parse(raw);
-    PVC_COST_CFT3 = obj.cft3 || {};
-    PVC_COST_CFT6 = obj.cft6 || {};
+    PVC_COST_CFT3 = normalizePvcSeriesTable(obj.cft3);
+    PVC_COST_CFT6 = normalizePvcSeriesTable(obj.cft6);
   } catch (e) {
     console.error("讀取 PVC 成本失敗：", e);
   }
 }
 
 /**
- * 根據物品編號 + 規格(mm) 取得 PVC 每米成本（元/M，不吃匯率）
+ * 從物品編號／品名判斷 PVC 顏色分類：black／transparent／color。
+ * 規則跟雲林熱縮的顏色判斷比照：字尾 C=透明，R/BL/G/Y=彩色，其餘=黑色。
+ */
+function getPvcColorType(itemCode, name) {
+  const code = (itemCode || "").toString().toUpperCase();
+  const text = (name || "").toString();
+
+  if (/C$/.test(code) || text.includes("透") || text.includes("透明")) {
+    return "transparent";
+  }
+  if (
+    /(R|BL|G|Y)$/.test(code) ||
+    /(紅|藍|綠|黃)/.test(text)
+  ) {
+    return "color";
+  }
+  return "black";
+}
+
+/**
+ * 根據物品編號 + 規格(mm) 取得 PVC 每米成本（元/M，不吃匯率），
+ * 會依顏色（黑/透明/彩色）分開查對應的成本表。
  */
 function getPvcUnitPrice(itemCode, specMm, name) {
   const codeUpper = (itemCode || "").toUpperCase();
@@ -484,18 +524,27 @@ function getPvcUnitPrice(itemCode, specMm, name) {
   const d = specMm != null ? parseFloat(specMm) : NaN;
   if (!Number.isFinite(d)) return null;
 
-  let table = null;
+  let seriesTable = null;
 
   if (codeUpper.startsWith("CFT-3")) {
-    table = PVC_COST_CFT3;
+    seriesTable = PVC_COST_CFT3;
   } else if (codeUpper.startsWith("CFT-6")) {
-    table = PVC_COST_CFT6;
+    seriesTable = PVC_COST_CFT6;
   } else if (text.includes("PVC高壓套管") || text.includes("PVC套管")) {
     // 若之後有其它 PVC 物品編號格式，再補判斷；目前先限制 CFT-3/6
     return null;
   } else {
     return null;
   }
+
+  const colorType = getPvcColorType(itemCode, name);
+  let table = seriesTable[colorType];
+
+  // 該顏色沒有資料就退回黑色（通常黑色最完整，總比查不到好）
+  if (!table || !Object.keys(table).length) {
+    table = seriesTable.black;
+  }
+  if (!table) return null;
 
   const keys = Object.keys(table);
   if (!keys.length) return null;
@@ -755,176 +804,6 @@ function handleSalesFile(e) {
 
   reader.readAsArrayBuffer(file);
 }
-
-// ========= PVC 成本計算（在 index 上用） =========
-
-const pvcWeightPerMInput = document.getElementById("pvcWeightPerM");
-const pvcWastePercentInput = document.getElementById("pvcWastePercent");
-const pvcPelletPriceInput = document.getElementById("pvcPelletPrice");
-const pvcSeriesSelect = document.getElementById("pvcSeries");
-const pvcSpecMmInput = document.getElementById("pvcSpecMm");
-const pvcCalcSaveBtn = document.getElementById("pvcCalcSaveBtn");
-const pvcCalcStatus = document.getElementById("pvcCalcStatus");
-
-const pvcLastInfo = document.getElementById("pvcLastInfo");
-const pvcSavedList = document.getElementById("pvcSavedList");
-
-// 把 PVC 成本寫回 localStorage
-function savePvcCostToLocalStorage() {
-  try {
-    const payload = {
-      cft3: PVC_COST_CFT3 || {},
-      cft6: PVC_COST_CFT6 || {},
-      updatedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(PVC_STORAGE_KEY, JSON.stringify(payload));
-  } catch (e) {
-    console.error("儲存 PVC 成本失敗：", e);
-  }
-}
-
-// 把所有已儲存的 PVC 成本列出來
-function renderPvcSummary() {
-  if (!pvcSavedList) return;
-
-  const lines = [];
-
-  const keys3 = Object.keys(PVC_COST_CFT3 || {}).sort(
-    (a, b) => parseFloat(a) - parseFloat(b)
-  );
-  const keys6 = Object.keys(PVC_COST_CFT6 || {}).sort(
-    (a, b) => parseFloat(a) - parseFloat(b)
-  );
-
-  if (!keys3.length && !keys6.length) {
-    pvcSavedList.textContent = "尚未儲存任何 PVC 成本。";
-    return;
-  }
-
-  if (keys3.length) {
-    const part = keys3
-      .map((k) => `內徑 ${k} mm → ${PVC_COST_CFT3[k].toFixed(4)} 元/M`)
-      .join("；");
-    lines.push(`CFT-3：${part}`);
-  }
-
-  if (keys6.length) {
-    const part = keys6
-      .map((k) => `內徑 ${k} mm → ${PVC_COST_CFT6[k].toFixed(4)} 元/M`)
-      .join("；");
-    lines.push(`CFT-6：${part}`);
-  }
-
-  pvcSavedList.innerHTML = lines.join("<br>");
-}
-
-// 只有在 index.html 上才會找到這些元素
-if (pvcCalcSaveBtn) {
-  // 先讀一次舊資料
-  if (typeof loadPvcCostFromLocalStorage === "function") {
-    loadPvcCostFromLocalStorage();
-  }
-  renderPvcSummary();
-
-  pvcCalcSaveBtn.addEventListener("click", () => {
-    const weightPerM = parseFloat(pvcWeightPerMInput.value); // g/M
-    const wastePercent = parseFloat(pvcWastePercentInput.value) || 0;
-    const pelletPrice = parseFloat(pvcPelletPriceInput.value);
-    const series = pvcSeriesSelect.value; // "CFT-3" / "CFT-6"
-    const specMm = parseFloat(pvcSpecMmInput.value);
-
-    if (!Number.isFinite(weightPerM) || weightPerM <= 0) {
-      pvcCalcStatus.textContent = "請輸入有效的『每米重 (g/M)』。";
-      return;
-    }
-    if (!Number.isFinite(pelletPrice) || pelletPrice <= 0) {
-      pvcCalcStatus.textContent = "請輸入有效的『PVC 粒 (元/Kg)』。";
-      return;
-    }
-    if (!Number.isFinite(specMm) || specMm <= 0) {
-      pvcCalcStatus.textContent = "請輸入有效的『規格內徑 (mm)』。";
-      return;
-    }
-
-    const wasteRate = wastePercent / 100;
-
-    // 每米重量 Kg
-    const weightKgPerM = weightPerM / 1000;
-
-    // ✅ 成本(元/M) = 重量(Kg/M) × PVC粒(元/Kg) × (1 + 廢料%)
-    const materialPricePerKg = pelletPrice * (1 + wasteRate);
-    const costPerM = weightKgPerM * materialPricePerKg;
-
-    const key = specMm.toFixed(3); // 內徑 mm 當 key
-
-    if (series === "CFT-3") {
-      PVC_COST_CFT3[key] = costPerM;
-    } else {
-      PVC_COST_CFT6[key] = costPerM;
-    }
-
-    savePvcCostToLocalStorage();
-    renderPvcSummary();
-
-    if (pvcLastInfo) {
-      pvcLastInfo.textContent =
-        `本次：${series} 內徑 ${key} mm → 每米成本 ${costPerM.toFixed(4)} 元/M。`;
-    }
-
-    pvcCalcStatus.textContent = "PVC 成本已計算並儲存。";
-  });
-}
-
-// 一鍵存入 CFT-3 / CFT-6 全部規格成本
-// 直接比照 2604銷售分析.xlsx 的公式：每米重(g) = (外徑-壁厚) × 壁厚 × 3.14 × 1.3
-// 不套用「廢料 (%)」欄位，因為公式裡的 1.3 已經含耗損係數了。
-const pvcBulkFillBtn = document.getElementById("pvcBulkFillBtn");
-if (pvcBulkFillBtn) {
-  pvcBulkFillBtn.addEventListener("click", () => {
-    const pelletPrice = parseFloat(pvcPelletPriceInput ? pvcPelletPriceInput.value : NaN);
-
-    if (!Number.isFinite(pelletPrice) || pelletPrice <= 0) {
-      pvcCalcStatus.textContent = "請先輸入有效的『PVC 粒 (元/Kg)』，再按一鍵存入。";
-      return;
-    }
-
-    let count3 = 0;
-    let count6 = 0;
-
-    Object.entries(CFT_SPEC_TABLE).forEach(([series, rows]) => {
-      rows.forEach(([label, innerMm, wallMm]) => {
-        const outerMm = innerMm + wallMm * 2;
-        const weightPerM = (outerMm - wallMm) * wallMm * 3.14 * 1.3; // g/M
-        const costPerM = (weightPerM / 1000) * pelletPrice; // 元/M
-
-        const key = innerMm.toFixed(3);
-        if (series === "CFT-3") {
-          PVC_COST_CFT3[key] = costPerM;
-          count3++;
-        } else {
-          PVC_COST_CFT6[key] = costPerM;
-          count6++;
-        }
-      });
-    });
-
-    savePvcCostToLocalStorage();
-    renderPvcSummary();
-
-    if (pvcLastInfo) {
-      pvcLastInfo.textContent =
-        `一鍵存入完成：CFT-3 共 ${count3} 個規格、CFT-6 共 ${count6} 個規格（單價 ${pelletPrice} 元/Kg）。`;
-    }
-    pvcCalcStatus.textContent =
-      "已依 PVC 粒單價一次計算並存入所有 CFT-3／CFT-6 規格成本，可以重新上傳銷貨明細套用。";
-
-    // 若銷貨明細已經上傳過，順便用新的 PVC 成本重新計算一次
-    if (typeof recalcAndRender === "function" && baseRows && baseRows.length) {
-      recalcAndRender();
-    }
-  });
-}
-
 
 // 成本表(順博/瑞普)裡沒有登記、但確認要比照鄰近規格計價的直徑對應。
 // 例：FSG-2-017(1.7mm) 比照 FSG-2-015(1.5mm) 計價。

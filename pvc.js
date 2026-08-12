@@ -8,8 +8,8 @@
 const PVC_STORAGE_KEY = "PVC_COST_TABLE";
 
 let pvcCost = {
-  cft3: {},      // 規格(mm) → 每米成本（台幣）
-  cft6: {},      // 規格(mm) → 每米成本（台幣）
+  cft3: { black: {}, transparent: {}, color: {} },
+  cft6: { black: {}, transparent: {}, color: {} },
   updatedAt: null,
 };
 
@@ -41,14 +41,28 @@ const CFT_SPEC_TABLE = {
   ],
 };
 
+function normalizeSeriesTable(raw) {
+  if (!raw) return { black: {}, transparent: {}, color: {} };
+  const looksNested = raw.black || raw.transparent || raw.color;
+  if (looksNested) {
+    return {
+      black: raw.black || {},
+      transparent: raw.transparent || {},
+      color: raw.color || {},
+    };
+  }
+  // 舊格式（沒分顏色，mm直接對成本）：當作黑色資料處理
+  return { black: raw, transparent: {}, color: {} };
+}
+
 function loadPvcFromStorage() {
   const raw = localStorage.getItem(PVC_STORAGE_KEY);
   if (!raw) return;
   try {
     const obj = JSON.parse(raw);
     pvcCost = {
-      cft3: obj.cft3 || {},
-      cft6: obj.cft6 || {},
+      cft3: normalizeSeriesTable(obj.cft3),
+      cft6: normalizeSeriesTable(obj.cft6),
       updatedAt: obj.updatedAt || null,
     };
   } catch (e) {
@@ -69,8 +83,17 @@ function renderPvcTables() {
   body3.innerHTML = "";
   body6.innerHTML = "";
 
-  const keys3 = Object.keys(pvcCost.cft3);
-  const keys6 = Object.keys(pvcCost.cft6);
+  function allKeys(seriesTable) {
+    const set = new Set([
+      ...Object.keys(seriesTable.black || {}),
+      ...Object.keys(seriesTable.transparent || {}),
+      ...Object.keys(seriesTable.color || {}),
+    ]);
+    return Array.from(set).sort((a, b) => parseFloat(a) - parseFloat(b));
+  }
+
+  const keys3 = allKeys(pvcCost.cft3);
+  const keys6 = allKeys(pvcCost.cft6);
 
   if (!keys3.length && !keys6.length) {
     infoEl.textContent = "目前尚未儲存任何 PVC 成本資料。";
@@ -83,23 +106,21 @@ function renderPvcTables() {
       ? `，最後更新：${new Date(pvcCost.updatedAt).toLocaleString()}`
       : "");
 
-  keys3
-    .sort((a, b) => parseFloat(a) - parseFloat(b))
-    .slice(0, 50)
-    .forEach((k) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${k}</td><td>${pvcCost.cft3[k].toFixed(4)}</td>`;
-      body3.appendChild(tr);
-    });
+  function fmt(v) {
+    return typeof v === "number" ? v.toFixed(4) : "-";
+  }
 
-  keys6
-    .sort((a, b) => parseFloat(a) - parseFloat(b))
-    .slice(0, 50)
-    .forEach((k) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${k}</td><td>${pvcCost.cft6[k].toFixed(4)}</td>`;
-      body6.appendChild(tr);
-    });
+  keys3.slice(0, 50).forEach((k) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${k}</td><td>${fmt(pvcCost.cft3.black[k])}</td><td>${fmt(pvcCost.cft3.transparent[k])}</td><td>${fmt(pvcCost.cft3.color[k])}</td>`;
+    body3.appendChild(tr);
+  });
+
+  keys6.slice(0, 50).forEach((k) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${k}</td><td>${fmt(pvcCost.cft6.black[k])}</td><td>${fmt(pvcCost.cft6.transparent[k])}</td><td>${fmt(pvcCost.cft6.color[k])}</td>`;
+    body6.appendChild(tr);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -126,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const costStatus = document.getElementById("costStatus");
 
   const seriesSelect = document.getElementById("seriesSelect");
+  const colorSelect = document.getElementById("colorSelect");
   const specForSaveInput = document.getElementById("specForSave");
   const saveStatus = document.getElementById("saveStatus");
 
@@ -239,92 +261,109 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const key = specVal.toFixed(3); // key 用 mm，保留三位小數
+    const color = colorSelect ? colorSelect.value : "black"; // black/transparent/color
 
     if (series === "CFT-3") {
-      pvcCost.cft3[key] = latestCostPerM;
+      pvcCost.cft3[color][key] = latestCostPerM;
     } else {
-      pvcCost.cft6[key] = latestCostPerM;
+      pvcCost.cft6[color][key] = latestCostPerM;
     }
 
     savePvcToStorage();
     renderPvcTables();
 
+    const colorLabel = { black: "黑色", transparent: "透明", color: "彩色" }[color] || color;
     saveStatus.innerHTML =
-      `<span class="ok">已儲存 ${series} 規格 ${key} mm，每米成本 ${latestCostPerM.toFixed(4)} 元。</span>`;
+      `<span class="ok">已儲存 ${series}（${colorLabel}）規格 ${key} mm，每米成本 ${latestCostPerM.toFixed(4)} 元。</span>`;
   });
 
-  // ---- 🚀 一鍵存入 CFT-3／CFT-6 全部規格成本 ----
+  // ---- 🚀 一鍵存入 CFT-3／CFT-6 全部規格成本（黑/透明/彩色各自套用單價） ----
   const bulkFillBtn = document.getElementById("bulkFillBtn");
   const bulkFillStatus = document.getElementById("bulkFillStatus");
+  const pelletPriceBlackInput = document.getElementById("pelletPriceBlack");
+  const pelletPriceTransparentInput = document.getElementById("pelletPriceTransparent");
+  const pelletPriceColorInput = document.getElementById("pelletPriceColor");
 
   if (bulkFillBtn) {
     bulkFillBtn.addEventListener("click", () => {
-      const pelletPrice = parseFloat(pelletPriceInput.value);
-      if (!Number.isFinite(pelletPrice) || pelletPrice <= 0) {
-        bulkFillStatus.innerHTML = `<span class="error">請先在上面輸入有效的『PVC 粒 (元/Kg)』，再按一鍵存入。</span>`;
+      const prices = {
+        black: parseFloat(pelletPriceBlackInput.value),
+        transparent: parseFloat(pelletPriceTransparentInput.value),
+        color: parseFloat(pelletPriceColorInput.value),
+      };
+
+      const validColors = Object.keys(prices).filter(
+        (c) => Number.isFinite(prices[c]) && prices[c] > 0
+      );
+
+      if (!validColors.length) {
+        bulkFillStatus.innerHTML = `<span class="error">請至少輸入一種顏色的『PVC 粒 (元/Kg)』單價，再按一鍵存入。</span>`;
         return;
       }
 
-      let count3 = 0;
-      let count6 = 0;
+      const counts = { black: 0, transparent: 0, color: 0 };
 
       Object.entries(CFT_SPEC_TABLE).forEach(([series, rows]) => {
         rows.forEach(([, innerMm, wallMm]) => {
           const outerMm = innerMm + wallMm * 2;
           const weightPerM = (outerMm - wallMm) * wallMm * 3.14 * 1.3; // g/M，1.3已含耗損係數
-          const costPerM = (weightPerM / 1000) * pelletPrice; // 元/M
-
           const key = innerMm.toFixed(3);
-          if (series === "CFT-3") {
-            pvcCost.cft3[key] = costPerM;
-            count3++;
-          } else {
-            pvcCost.cft6[key] = costPerM;
-            count6++;
-          }
+          const seriesKey = series === "CFT-3" ? "cft3" : "cft6";
+
+          validColors.forEach((color) => {
+            const costPerM = (weightPerM / 1000) * prices[color]; // 元/M
+            pvcCost[seriesKey][color][key] = costPerM;
+            counts[color]++;
+          });
         });
       });
 
       savePvcToStorage();
       renderPvcTables();
 
+      const colorLabels = { black: "黑色", transparent: "透明", color: "彩色" };
+      const summary = validColors
+        .map((c) => `${colorLabels[c]}(${prices[c]}元/Kg)`)
+        .join("、");
       bulkFillStatus.innerHTML =
-        `<span class="ok">一鍵存入完成：CFT-3 共 ${count3} 個規格、CFT-6 共 ${count6} 個規格（單價 ${pelletPrice} 元/Kg）。</span>`;
+        `<span class="ok">一鍵存入完成：已套用 ${summary}，CFT-3/CFT-6 每種顏色各 ${counts[validColors[0]]} 個規格。</span>`;
     });
   }
 
-  // ---- 📋 PVC 每米成本速查表 ----
+  // ---- 📋 PVC 每米成本速查表（黑/透明/彩色三欄同時顯示） ----
   let specTableActiveSeries = "CFT-3";
   const specTableBody = document.getElementById("specTableBody");
   const tabCFT3 = document.getElementById("tabCFT3");
   const tabCFT6 = document.getElementById("tabCFT6");
 
-  function specCalcRow(innerD, wall, pelletPrice) {
+  function specCalcCost(innerD, wall, pelletPrice) {
     const outerD = innerD + wall * 2;
     const weightPerM = (outerD - wall) * wall * 3.14 * 1.3;
-    const costPerM = (weightPerM / 1000) * pelletPrice;
-    const cost305 = costPerM * 305;
-    return { outerD, weightPerM, costPerM, cost305 };
+    return (weightPerM / 1000) * pelletPrice;
   }
 
   function renderSpecTable() {
     if (!specTableBody) return;
-    const pelletPrice = parseFloat(pelletPriceInput.value);
-    const validPrice = Number.isFinite(pelletPrice) && pelletPrice > 0 ? pelletPrice : 0;
+    const priceBlack = parseFloat(pelletPriceBlackInput.value) || 0;
+    const priceTransparent = parseFloat(pelletPriceTransparentInput.value) || 0;
+    const priceColor = parseFloat(pelletPriceColorInput.value) || 0;
     const rows = CFT_SPEC_TABLE[specTableActiveSeries] || [];
 
     specTableBody.innerHTML = "";
     rows.forEach(([label, innerD, wall]) => {
-      const { outerD, weightPerM, costPerM, cost305 } = specCalcRow(innerD, wall, validPrice);
+      const outerD = innerD + wall * 2;
+      const costBlack = specCalcCost(innerD, wall, priceBlack);
+      const costTransparent = specCalcCost(innerD, wall, priceTransparent);
+      const costColor = specCalcCost(innerD, wall, priceColor);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${label}</td>
         <td>${innerD}</td>
         <td>${wall}</td>
         <td>${outerD.toFixed(3)}</td>
-        <td>${weightPerM.toFixed(3)}</td>
-        <td>${costPerM.toFixed(3)}</td>
-        <td>${cost305.toFixed(1)}</td>
+        <td>${costBlack.toFixed(3)}</td>
+        <td>${costTransparent.toFixed(3)}</td>
+        <td>${costColor.toFixed(3)}</td>
       `;
       specTableBody.appendChild(tr);
     });
@@ -332,9 +371,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (tabCFT3) tabCFT3.addEventListener("click", () => { specTableActiveSeries = "CFT-3"; renderSpecTable(); });
   if (tabCFT6) tabCFT6.addEventListener("click", () => { specTableActiveSeries = "CFT-6"; renderSpecTable(); });
-  if (pelletPriceInput) {
-    pelletPriceInput.addEventListener("input", renderSpecTable);
-    pelletPriceInput.addEventListener("change", renderSpecTable);
-  }
+  [pelletPriceBlackInput, pelletPriceTransparentInput, pelletPriceColorInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("input", renderSpecTable);
+      input.addEventListener("change", renderSpecTable);
+    }
+  });
   renderSpecTable();
 });
