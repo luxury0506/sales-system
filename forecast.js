@@ -210,7 +210,9 @@ function computeForecast(monthly) {
       code,
       name,
       recentQtyAvg,
+      recentMetersAvg,
       allQtyAvg,
+      allMetersAvg,
       suggestedQty,
       suggestedMeters,
       monthsWithData: allMonths.filter((m) => monthly[m][code]).length,
@@ -233,9 +235,11 @@ function renderTable() {
       <td class="border px-2 py-1">${escapeHtml(r.code)}</td>
       <td class="border px-2 py-1 text-slate-500 text-[10px]">${escapeHtml(r.name)}</td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(r.recentQtyAvg)}</td>
+      <td class="border px-2 py-1 text-right">${formatMeters(r.recentMetersAvg)}</td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(r.allQtyAvg)}</td>
+      <td class="border px-2 py-1 text-right">${formatMeters(r.allMetersAvg)}</td>
       <td class="border px-2 py-1 text-right font-semibold">${formatQtyInt(r.suggestedQty)}</td>
-      <td class="border px-2 py-1 text-right">${formatMeters(r.suggestedMeters)}</td>
+      <td class="border px-2 py-1 text-right font-semibold">${formatMeters(r.suggestedMeters)}</td>
       <td class="border px-2 py-1 text-right">${r.monthsWithData}</td>
     `;
     tbody.appendChild(tr);
@@ -247,15 +251,18 @@ function renderTable() {
 
 function downloadExcel() {
   if (!forecastResults.length) return;
+  const roundM = (v) => Number((Math.round(v * 1000) / 1000).toFixed(3));
   const aoa = [
-    ["產品系列", "品名", "近3月平均(數量)", "全歷史平均(數量)", "建議月叫貨量(數量)", "建議月叫貨量(米數)", "已有月份數"],
+    ["產品系列", "品名", "近3月平均(數量)", "近3月平均(米數)", "全歷史平均(數量)", "全歷史平均(米數)", "建議月叫貨量(數量)", "建議月叫貨量(米數)", "已有月份數"],
     ...forecastResults.map((r) => [
       r.code,
       r.name,
       Math.round(r.recentQtyAvg),
+      roundM(r.recentMetersAvg),
       Math.round(r.allQtyAvg),
+      roundM(r.allMetersAvg),
       Math.round(r.suggestedQty),
-      Number((Math.round(r.suggestedMeters * 1000) / 1000).toFixed(3)),
+      roundM(r.suggestedMeters),
       r.monthsWithData,
     ]),
   ];
