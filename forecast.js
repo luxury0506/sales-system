@@ -312,7 +312,31 @@ function refreshDisplay() {
 // ============================================================
 // 📥 匯入整年歷史資料：解析Excel，把年度總量平均拆成12個月，
 // 灌進 itemMonthlyUsage。已經有真實記錄的月份不覆蓋，直接跳過。
+//
+// 支援兩種常見格式：
+//   ① 「產品別統計」彙總格式：標題就在第一列，欄位是
+//      產品系列/物品編號、品名、總計數量、總計米數。
+//   ② 「客戶銷售明細表」原始明細格式：標題前面通常還有公司名稱、
+//      報表標題、日期範圍等好幾列，欄位是物品編號、品名、銷貨量
+//      （通常沒有米數欄位），資料按客戶分組，中間穿插「客戶名稱:」
+//      跟「小計」這種不是真正品項的列，且同一個物品編號會在不同
+//      客戶底下重複出現，需要把「銷貨量」全部加總起來才是年度總量。
 // ============================================================
+function findHeaderRow(rows) {
+  const scanLimit = Math.min(rows.length, 30);
+  for (let i = 0; i < scanLimit; i++) {
+    const row = Array.from(rows[i] || []).map((c) => (c == null ? "" : c.toString().trim()));
+    const codeIdx = row.findIndex((h) => h.includes("編號") || h.includes("系列"));
+    const qtyIdx = row.findIndex((h) => (h.includes("數量") || h.includes("銷貨量")) && !h.includes("米"));
+    if (codeIdx !== -1 && qtyIdx !== -1) {
+      const nameIdx = row.findIndex((h) => h.includes("品名"));
+      const meterIdx = row.findIndex((h) => h.includes("米數"));
+      return { headerRowIndex: i, codeIdx, nameIdx, qtyIdx, meterIdx };
+    }
+  }
+  return null;
+}
+
 function parseImportFile(file, callback) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -323,28 +347,38 @@ function parseImportFile(file, callback) {
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       if (!rows.length) { callback(null, "檔案是空的。"); return; }
 
-      // 用 Array.from 先把「空洞」(某些欄位標題儲存格是空的) 填成真正的 undefined，
-      // 再統一轉成字串，這樣後面每個欄位判斷都不會因為稀疏陣列而漏判、報錯。
-      const header = Array.from(rows[0] || []).map((h) => (h == null ? "" : h.toString().trim()));
-      const codeIdx = header.findIndex((h) => h.includes("編號") || h.includes("系列"));
-      const nameIdx = header.findIndex((h) => h.includes("品名"));
-      const qtyIdx = header.findIndex((h) => h.includes("數量") && !h.includes("米"));
-      const meterIdx = header.findIndex((h) => h.includes("米數"));
-
-      if (codeIdx === -1 || qtyIdx === -1) {
-        callback(null, "找不到必要欄位（物品編號/產品系列、總計數量），請確認檔案格式跟「產品別統計」匯出的一樣。");
+      const found = findHeaderRow(rows);
+      if (!found) {
+        callback(null, "找不到必要欄位（物品編號/產品系列、總計數量/銷貨量），請確認檔案格式。");
         return;
       }
+      const { headerRowIndex, codeIdx, nameIdx, qtyIdx, meterIdx } = found;
 
+      // 同一個物品編號可能在明細表裡分散出現很多次（不同客戶各買一些），
+      // 這裡用累加的方式把同一個編號的銷貨量全部加總，才是年度總量。
       const items = {};
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = headerRowIndex + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row[codeIdx] == null || row[codeIdx] === "") continue;
-        const code = String(row[codeIdx]).trim();
+
+        const codeRaw = String(row[codeIdx]).trim();
+        // 跳過「客戶名稱:(CHxxx)xxx」這種分組標籤列（不是真正的品項資料）
+        if (codeRaw.includes("客戶名稱")) continue;
+
         const name = nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "";
+        // 跳過「小計」列：物品編號欄位剛好落在小計文字，或品名欄位是「小計」
+        if (codeRaw === "小計" || name === "小計") continue;
+
         const qty = parseFloat(row[qtyIdx]) || 0;
+        // 這種明細表通常沒有米數欄位，沒有的話用數量頂替（跟系統其他地方一致的作法）
         const meters = meterIdx !== -1 ? parseFloat(row[meterIdx]) || 0 : qty;
-        items[code] = { qty, meters, name };
+
+        if (!items[codeRaw]) {
+          items[codeRaw] = { qty: 0, meters: 0, name };
+        }
+        items[codeRaw].qty += qty;
+        items[codeRaw].meters += meters;
+        if (name) items[codeRaw].name = name;
       }
 
       if (!Object.keys(items).length) {
