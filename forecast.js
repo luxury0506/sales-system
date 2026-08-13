@@ -29,7 +29,7 @@ function formatQtyInt(v) {
 function formatMeters(v) {
   const num = Number(v);
   if (!Number.isFinite(num)) return "";
-  return (Math.round(num * 1000) / 1000).toLocaleString("zh-TW");
+  return Math.round(num).toLocaleString("zh-TW");
 }
 
 function loadItemUsage() {
@@ -139,7 +139,7 @@ function extractProductSeries(row) {
 
 
 // 把 { month: { 記錄key: { itemCode: {qty,meters,name} } } }
-// 依「產品系列」（不是原始物品編號）彙總成 { month: { series: {qty,meters,name} } }。
+// 依「產品系列」（不是原始物品編號）彙總成 { month: { series: {qty,meters,names:Set} } }。
 // 記錄key可能是整月合計(YYYY-MM-00)，也可能是舊版逐日記錄留下的日期，
 // 這裡不管是哪種都直接加總，兩種資料格式都能正確彙總。
 function aggregateByMonth(all) {
@@ -157,11 +157,11 @@ function aggregateByMonth(all) {
         const rec = items[code];
         const series = extractProductSeries({ itemCode: code, name: rec.name || "" });
         if (!monthly[month][series]) {
-          monthly[month][series] = { qty: 0, meters: 0, name: rec.name || "" };
+          monthly[month][series] = { qty: 0, meters: 0, names: new Set() };
         }
         monthly[month][series].qty += rec.qty || 0;
         monthly[month][series].meters += rec.meters || 0;
-        if (rec.name) monthly[month][series].name = rec.name;
+        if (rec.name) monthly[month][series].names.add(rec.name);
       });
     });
   });
@@ -182,7 +182,7 @@ function computeForecast(monthly) {
 
   const results = [];
   allCodes.forEach((code) => {
-    let name = "";
+    const nameSet = new Set();
     let recentQtySum = 0;
     let recentMetersSum = 0;
     recentMonths.forEach((m) => {
@@ -190,7 +190,7 @@ function computeForecast(monthly) {
       if (rec) {
         recentQtySum += rec.qty;
         recentMetersSum += rec.meters;
-        if (rec.name) name = rec.name;
+        rec.names.forEach((n) => nameSet.add(n));
       }
     });
     const recentQtyAvg = recentMonths.length ? recentQtySum / recentMonths.length : 0;
@@ -203,7 +203,7 @@ function computeForecast(monthly) {
       if (rec) {
         allQtySum += rec.qty;
         allMetersSum += rec.meters;
-        if (rec.name) name = rec.name;
+        rec.names.forEach((n) => nameSet.add(n));
       }
     });
     const allQtyAvg = allMonths.length ? allQtySum / allMonths.length : 0;
@@ -212,9 +212,18 @@ function computeForecast(monthly) {
     const suggestedQty = recentQtyAvg * RECENT_WEIGHT + allQtyAvg * HISTORY_WEIGHT;
     const suggestedMeters = recentMetersAvg * RECENT_WEIGHT + allMetersAvg * HISTORY_WEIGHT;
 
+    // 品名比照 product.html：超過5個時精簡顯示，可點擊展開全部／收合
+    const namesArray = Array.from(nameSet);
+    const isTruncated = namesArray.length > 5;
+    const shortNamesText = isTruncated ? namesArray.slice(0, 5).join("、 ") : namesArray.join("、 ");
+    const allNamesText = namesArray.join("、 ");
+
     results.push({
       code,
-      name,
+      allNamesText,
+      shortNamesText,
+      isTruncated,
+      nameCount: namesArray.length,
       recentQtyAvg,
       recentMetersAvg,
       allQtyAvg,
@@ -280,6 +289,28 @@ function setupSortableHeaders() {
   });
 }
 
+// 渲染「品名」這一格：預設精簡顯示，超過5個品名時
+// 附上「顯示全部」按鈕，點擊可展開完整清單／再點一次收合。
+// 跟 product.html 的做法一致。
+function renderNamesCell(cell, r, expanded) {
+  if (!cell) return;
+  if (!r.isTruncated) {
+    cell.innerHTML = `<span>${escapeHtml(r.allNamesText)}</span>`;
+    return;
+  }
+  if (expanded) {
+    cell.innerHTML =
+      `<span>${escapeHtml(r.allNamesText)}</span> ` +
+      `<button type="button" class="toggleNamesBtn text-blue-600 hover:underline whitespace-nowrap">收合 ▲</button>`;
+  } else {
+    cell.innerHTML =
+      `<span>${escapeHtml(r.shortNamesText)}...</span> ` +
+      `<button type="button" class="toggleNamesBtn text-blue-600 hover:underline whitespace-nowrap">顯示全部 ${r.nameCount} 個 ▼</button>`;
+  }
+  const btn = cell.querySelector(".toggleNamesBtn");
+  btn.addEventListener("click", () => renderNamesCell(cell, r, !expanded));
+}
+
 function renderTable(skipSort) {
   if (!skipSort) {
     sortForecastResults();
@@ -287,11 +318,11 @@ function renderTable(skipSort) {
   updateSortArrows();
   const tbody = document.getElementById("forecastTbody");
   tbody.innerHTML = "";
-  forecastResults.forEach((r) => {
+  forecastResults.forEach((r, idx) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="border px-2 py-1">${escapeHtml(r.code)}</td>
-      <td class="border px-2 py-1 text-slate-500 text-[10px]">${escapeHtml(r.name)}</td>
+      <td class="border px-2 py-1 text-slate-500 text-[10px] break-words max-w-[220px]" data-idx="${idx}"></td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(r.recentQtyAvg)}</td>
       <td class="border px-2 py-1 text-right">${formatMeters(r.recentMetersAvg)}</td>
       <td class="border px-2 py-1 text-right">${formatQtyInt(r.allQtyAvg)}</td>
@@ -301,6 +332,7 @@ function renderTable(skipSort) {
       <td class="border px-2 py-1 text-right">${r.monthsWithData}</td>
     `;
     tbody.appendChild(tr);
+    renderNamesCell(tr.querySelector(`td[data-idx="${idx}"]`), r, false);
   });
 
   const downloadBtn = document.getElementById("downloadForecastExcel");
@@ -309,12 +341,12 @@ function renderTable(skipSort) {
 
 function downloadExcel() {
   if (!forecastResults.length) return;
-  const roundM = (v) => Number((Math.round(v * 1000) / 1000).toFixed(3));
+  const roundM = (v) => Math.round(v);
   const aoa = [
     ["產品系列", "品名", "近3月平均(數量)", "近3月平均(米數)", "全歷史平均(數量)", "全歷史平均(米數)", "建議月叫貨量(數量)", "建議月叫貨量(米數)", "已有月份數"],
     ...forecastResults.map((r) => [
       r.code,
-      r.name,
+      r.allNamesText,
       Math.round(r.recentQtyAvg),
       roundM(r.recentMetersAvg),
       Math.round(r.allQtyAvg),
