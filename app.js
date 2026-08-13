@@ -751,6 +751,11 @@ function handleSalesFile(e) {
         const name = safeCell(row[nameColIndex]);
         if (!name) continue;
 
+        // 跳過「小計」「合計」「總計」這種每個客戶群組結尾的加總列，
+        // 這種列本身就是上面幾筆交易的加總，不是真正的商品交易；
+        // 如果不跳過，會被當成一筆新的交易再加一次，導致總量被重複計算。
+        if (name === "小計" || name === "合計" || name === "總計") continue;
+
         const qty = parseNumber(row[qtyColIndex]);
         if (!Number.isFinite(qty)) continue;
 
