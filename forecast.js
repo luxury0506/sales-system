@@ -323,7 +323,9 @@ function parseImportFile(file, callback) {
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       if (!rows.length) { callback(null, "檔案是空的。"); return; }
 
-      const header = rows[0].map((h) => (h == null ? "" : h.toString().trim()));
+      // 用 Array.from 先把「空洞」(某些欄位標題儲存格是空的) 填成真正的 undefined，
+      // 再統一轉成字串，這樣後面每個欄位判斷都不會因為稀疏陣列而漏判、報錯。
+      const header = Array.from(rows[0] || []).map((h) => (h == null ? "" : h.toString().trim()));
       const codeIdx = header.findIndex((h) => h.includes("編號") || h.includes("系列"));
       const nameIdx = header.findIndex((h) => h.includes("品名"));
       const qtyIdx = header.findIndex((h) => h.includes("數量") && !h.includes("米"));
