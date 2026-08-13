@@ -278,7 +278,7 @@ function downloadExcel() {
   XLSX.writeFile(wb, "叫貨量預估.xlsx");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function refreshDisplay() {
   const statusEl = document.getElementById("status");
   const all = loadItemUsage();
   const { monthly } = aggregateByMonth(all);
@@ -288,6 +288,9 @@ document.addEventListener("DOMContentLoaded", () => {
     statusEl.textContent =
       `目前還沒有已記錄的整月資料，請先到主頁上傳一整個月的銷貨明細並按「✅ 記錄這個月」，` +
       `累積至少 ${MIN_MONTHS_REQUIRED} 個月才會顯示估算結果（月數越多，近3月/全歷史的比較越準）。`;
+    forecastResults = [];
+    const tbody = document.getElementById("forecastTbody");
+    if (tbody) tbody.innerHTML = "";
     return;
   }
 
@@ -304,7 +307,126 @@ document.addEventListener("DOMContentLoaded", () => {
     (monthCount < RECENT_MONTHS_COUNT ? `（目前月數還不到${RECENT_MONTHS_COUNT}個月，近期平均會用現有的全部月份計算）。` : "。");
 
   renderTable();
+}
+
+// ============================================================
+// 📥 匯入整年歷史資料：解析Excel，把年度總量平均拆成12個月，
+// 灌進 itemMonthlyUsage。已經有真實記錄的月份不覆蓋，直接跳過。
+// ============================================================
+function parseImportFile(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      if (!rows.length) { callback(null, "檔案是空的。"); return; }
+
+      const header = rows[0].map((h) => (h == null ? "" : h.toString().trim()));
+      const codeIdx = header.findIndex((h) => h.includes("編號") || h.includes("系列"));
+      const nameIdx = header.findIndex((h) => h.includes("品名"));
+      const qtyIdx = header.findIndex((h) => h.includes("數量") && !h.includes("米"));
+      const meterIdx = header.findIndex((h) => h.includes("米數"));
+
+      if (codeIdx === -1 || qtyIdx === -1) {
+        callback(null, "找不到必要欄位（物品編號/產品系列、總計數量），請確認檔案格式跟「產品別統計」匯出的一樣。");
+        return;
+      }
+
+      const items = {};
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row[codeIdx] == null || row[codeIdx] === "") continue;
+        const code = String(row[codeIdx]).trim();
+        const name = nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "";
+        const qty = parseFloat(row[qtyIdx]) || 0;
+        const meters = meterIdx !== -1 ? parseFloat(row[meterIdx]) || 0 : qty;
+        items[code] = { qty, meters, name };
+      }
+
+      if (!Object.keys(items).length) {
+        callback(null, "沒有解析到任何品項資料，請確認檔案內容。");
+        return;
+      }
+      callback(items, null);
+    } catch (err) {
+      console.error(err);
+      callback(null, "讀取檔案時發生錯誤，請確認是正確的 Excel 檔案。");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  refreshDisplay();
 
   const downloadBtn = document.getElementById("downloadForecastExcel");
-  downloadBtn.addEventListener("click", downloadExcel);
+  if (downloadBtn) downloadBtn.addEventListener("click", downloadExcel);
+
+  const importBtn = document.getElementById("importBtn");
+  if (importBtn) {
+    importBtn.addEventListener("click", () => {
+      const fileInput = document.getElementById("importFile");
+      const yearInput = document.getElementById("importYear");
+      const importStatus = document.getElementById("importStatus");
+
+      const file = fileInput.files && fileInput.files[0];
+      const year = parseInt(yearInput.value, 10);
+
+      if (!file) {
+        importStatus.textContent = "請先選擇檔案。";
+        return;
+      }
+      if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+        importStatus.textContent = "請輸入有效的年份，例如 2025。";
+        return;
+      }
+
+      importStatus.textContent = "匯入中…";
+
+      parseImportFile(file, (items, err) => {
+        if (err) {
+          importStatus.textContent = err;
+          return;
+        }
+
+        const all = loadItemUsage();
+        let importedMonths = 0;
+        let skippedMonths = 0;
+
+        for (let m = 1; m <= 12; m++) {
+          const month = `${year}-${String(m).padStart(2, "0")}`;
+          if (all[month] && Object.keys(all[month]).length) {
+            skippedMonths++;
+            continue; // 已有真實記錄的月份，不覆蓋
+          }
+          const key = `${month}-00`;
+          const monthItems = {};
+          Object.keys(items).forEach((code) => {
+            monthItems[code] = {
+              qty: items[code].qty / 12,
+              meters: items[code].meters / 12,
+              name: items[code].name,
+            };
+          });
+          all[month] = { [key]: monthItems };
+          importedMonths++;
+        }
+
+        try {
+          localStorage.setItem(ITEM_STORAGE_KEY, JSON.stringify(all));
+        } catch (e) {
+          importStatus.textContent = "儲存失敗，可能是瀏覽器儲存空間不足。";
+          return;
+        }
+
+        importStatus.textContent =
+          `匯入完成：${year}年共 ${Object.keys(items).length} 個品項，已灌入 ${importedMonths} 個月` +
+          (skippedMonths ? `（${skippedMonths} 個月已有真實記錄資料，已跳過保留）。` : "。");
+
+        refreshDisplay();
+      });
+    });
+  }
 });

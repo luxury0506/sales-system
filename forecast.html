@@ -28,6 +28,35 @@
       </div>
     </header>
 
+    <!-- 匯入整年歷史資料，當作起始基礎，不用等真的累積12個月 -->
+    <section class="bg-white shadow rounded-xl p-4 space-y-3">
+      <h2 class="text-sm font-semibold text-slate-700">📥 匯入整年歷史資料（選用）</h2>
+      <p class="text-xs text-slate-500">
+        如果手上已經有去年一整年的「產品別米數統計」Excel（欄位含物品編號/產品系列、品名、總計數量、總計米數），
+        可以直接匯入當作歷史基礎，不用等系統真的累積12個月。<br>
+        匯入方式：把年度總量平均拆成12個月（每月 = 年度總量 ÷ 12），灌進對應年份的每個月份。
+        如果那個月份已經有真實記錄的資料，<b>不會覆蓋</b>，會跳過那個月（保留真實資料優先）。
+      </p>
+      <div class="flex flex-wrap items-end gap-3 text-sm">
+        <div>
+          <label class="block text-slate-700 mb-1">選擇 Excel 檔案</label>
+          <input id="importFile" type="file" accept=".xlsx,.xls" class="text-sm" />
+        </div>
+        <div>
+          <label class="block text-slate-700 mb-1">這份資料是哪一年</label>
+          <input id="importYear" type="number" class="border rounded px-2 py-1 text-sm w-24" placeholder="例如 2025" />
+        </div>
+        <button
+          id="importBtn"
+          type="button"
+          class="px-3 py-1.5 rounded text-xs font-medium bg-blue-500 text-white hover:bg-blue-600"
+        >
+          📥 匯入這一年
+        </button>
+        <div id="importStatus" class="text-xs text-slate-600"></div>
+      </div>
+    </section>
+
     <section class="bg-white shadow rounded-xl p-4 space-y-3">
       <div id="status" class="text-sm text-slate-700"></div>
 
