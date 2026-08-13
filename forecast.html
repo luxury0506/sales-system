@@ -73,15 +73,15 @@
         <table class="min-w-full text-xs text-left">
           <thead class="bg-slate-50 sticky top-0">
             <tr>
-              <th class="border px-2 py-1">產品系列</th>
-              <th class="border px-2 py-1">品名</th>
-              <th class="border px-2 py-1 text-right">近3月平均(數量)</th>
-              <th class="border px-2 py-1 text-right">近3月平均(米數)</th>
-              <th class="border px-2 py-1 text-right">全歷史平均(數量)</th>
-              <th class="border px-2 py-1 text-right">全歷史平均(米數)</th>
-              <th class="border px-2 py-1 text-right">建議月叫貨量(數量)</th>
-              <th class="border px-2 py-1 text-right">建議月叫貨量(米數)</th>
-              <th class="border px-2 py-1 text-right">已有月份數</th>
+              <th class="border px-2 py-1 cursor-pointer select-none hover:bg-slate-100" data-sort-key="code" data-sort-type="text">產品系列 <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 cursor-pointer select-none hover:bg-slate-100" data-sort-key="name" data-sort-type="text">品名 <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="recentQtyAvg" data-sort-type="num">近3月平均(數量) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="recentMetersAvg" data-sort-type="num">近3月平均(米數) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="allQtyAvg" data-sort-type="num">全歷史平均(數量) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="allMetersAvg" data-sort-type="num">全歷史平均(米數) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="suggestedQty" data-sort-type="num">建議月叫貨量(數量) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="suggestedMeters" data-sort-type="num">建議月叫貨量(米數) <span class="sortArrow"></span></th>
+              <th class="border px-2 py-1 text-right cursor-pointer select-none hover:bg-slate-100" data-sort-key="monthsWithData" data-sort-type="num">已有月份數 <span class="sortArrow"></span></th>
             </tr>
           </thead>
           <tbody id="forecastTbody"></tbody>

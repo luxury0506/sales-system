@@ -231,8 +231,60 @@ function computeForecast(monthly) {
 }
 
 let forecastResults = [];
+let currentSortKey = "suggestedQty";
+let currentSortDir = "desc"; // "asc" | "desc"
 
-function renderTable() {
+function sortForecastResults() {
+  const key = currentSortKey;
+  const dir = currentSortDir === "asc" ? 1 : -1;
+  const th = document.querySelector(`th[data-sort-key="${key}"]`);
+  const type = th ? th.getAttribute("data-sort-type") : "num";
+
+  forecastResults.sort((a, b) => {
+    if (type === "text") {
+      const av = (a[key] || "").toString();
+      const bv = (b[key] || "").toString();
+      return av.localeCompare(bv, "zh-Hant") * dir;
+    }
+    return ((a[key] || 0) - (b[key] || 0)) * dir;
+  });
+}
+
+function updateSortArrows() {
+  document.querySelectorAll("th[data-sort-key]").forEach((th) => {
+    const arrow = th.querySelector(".sortArrow");
+    if (!arrow) return;
+    if (th.getAttribute("data-sort-key") === currentSortKey) {
+      arrow.textContent = currentSortDir === "asc" ? "▲" : "▼";
+    } else {
+      arrow.textContent = "";
+    }
+  });
+}
+
+function setupSortableHeaders() {
+  document.querySelectorAll("th[data-sort-key]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort-key");
+      if (currentSortKey === key) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+      } else {
+        currentSortKey = key;
+        // 數量類欄位預設由大到小看比較直覺，品名/系列預設由小到大(字母排序)
+        currentSortDir = th.getAttribute("data-sort-type") === "text" ? "asc" : "desc";
+      }
+      sortForecastResults();
+      updateSortArrows();
+      renderTable(true);
+    });
+  });
+}
+
+function renderTable(skipSort) {
+  if (!skipSort) {
+    sortForecastResults();
+  }
+  updateSortArrows();
   const tbody = document.getElementById("forecastTbody");
   tbody.innerHTML = "";
   forecastResults.forEach((r) => {
@@ -325,7 +377,12 @@ function refreshDisplay() {
 function findHeaderRow(rows) {
   const scanLimit = Math.min(rows.length, 30);
   for (let i = 0; i < scanLimit; i++) {
-    const row = Array.from(rows[i] || []).map((c) => (c == null ? "" : c.toString().trim()));
+    // 先把每個儲存格轉成字串，並把所有空白（含全形空白）都拿掉再比對，
+    // 因為有些報表的欄位標題中間會有排版用的空格，例如「品　名」，
+    // 直接比對「品名」會抓不到，要先去空白才比對得到。
+    const row = Array.from(rows[i] || []).map((c) =>
+      c == null ? "" : c.toString().replace(/[\s\u3000]/g, "")
+    );
     const codeIdx = row.findIndex((h) => h.includes("編號") || h.includes("系列"));
     const qtyIdx = row.findIndex((h) => (h.includes("數量") || h.includes("銷貨量")) && !h.includes("米"));
     if (codeIdx !== -1 && qtyIdx !== -1) {
@@ -368,6 +425,9 @@ function parseImportFile(file, callback) {
         const name = nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "";
         // 跳過「小計」列：物品編號欄位剛好落在小計文字，或品名欄位是「小計」
         if (codeRaw === "小計" || name === "小計") continue;
+        // 跳過「合計」列：整份報表最後面的總加總列，同樣不是真正的品項，
+        // 不擋掉的話會被當成一筆巨大的假品項，混進所有平均值計算裡。
+        if (codeRaw === "合計" || name === "合計") continue;
 
         const qty = parseFloat(row[qtyIdx]) || 0;
         // 這種明細表通常沒有米數欄位，沒有的話用數量頂替（跟系統其他地方一致的作法）
@@ -395,6 +455,7 @@ function parseImportFile(file, callback) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  setupSortableHeaders();
   refreshDisplay();
 
   const downloadBtn = document.getElementById("downloadForecastExcel");
