@@ -571,6 +571,7 @@ function getPvcUnitPrice(itemCode, specMm, name) {
  ************************/
 const salesFileInput = document.getElementById("salesFile");
 const exchangeRateInput = document.getElementById("exchangeRate");
+const usdExchangeRateInput = document.getElementById("usdExchangeRate");
 const applyRateBtn = document.getElementById("applyRateBtn");
 const statusEl = document.getElementById("status");
 const tableContainer = document.getElementById("tableContainer");
@@ -619,6 +620,9 @@ if (applyRateBtn) {
 }
 if (exchangeRateInput) {
   exchangeRateInput.addEventListener("change", () => recalcAndRender());
+}
+if (usdExchangeRateInput) {
+  usdExchangeRateInput.addEventListener("change", () => recalcAndRender());
 }
 if (downloadBtn) {
   downloadBtn.addEventListener("click", downloadExcel);
@@ -827,6 +831,16 @@ const MM_SPEC_COST_ALIAS = {
  *  1) 雲林熱縮（不吃匯率）
  *  2) 順博 / 瑞普（吃匯率，含顏色加價）
  ************************/
+// 這幾個編號的「銷貨金額」在原始明細裡是用美金報價，不是台幣，
+// 需要另外乘美金匯率才是正確的台幣金額（跟其他商品的人民幣匯率分開算）。
+const USD_ITEM_CODES = [
+  "PDK0001323",
+  "PDU0000309",
+  "PDU0000310",
+  "PDK0001324",
+  "WMG0000362",
+];
+
 function recalcAndRender() {
   if (!baseRows.length) {
     tableContainer.classList.add("hidden");
@@ -837,9 +851,23 @@ function recalcAndRender() {
   const rateVal = parseFloat(exchangeRateInput.value);
   const hasRate = Number.isFinite(rateVal) && rateVal > 0;
 
+  const usdRateVal = parseFloat(usdExchangeRateInput ? usdExchangeRateInput.value : NaN);
+  const hasUsdRate = Number.isFinite(usdRateVal) && usdRateVal > 0;
+
+  const hasUsdItems = baseRows.some((row) =>
+    USD_ITEM_CODES.includes((row.itemCode || "").toUpperCase())
+  );
+
+  // 每次重新計算都先清空舊的提示，避免上一次算出來的警告訊息卡著沒被蓋掉。
+  statusEl.textContent = "";
   if (!hasRate) {
     statusEl.textContent =
       "提醒：尚未輸入有效匯率，順博 / 瑞普的銷貨成本與毛利會顯示為 0（雲林熱縮、PET/AIS/AISC/YG/HTK/ATM 與 PVC 不受影響）。";
+  }
+  if (hasUsdItems && !hasUsdRate) {
+    statusEl.textContent =
+      (statusEl.textContent ? statusEl.textContent + " " : "") +
+      "提醒：這批明細裡有美金計價的品項（PDK0001323 等），但尚未輸入美金匯率，這幾筆的銷貨金額與毛利會維持原始數字，不會換算成台幣。";
   }
 
   processedRows = baseRows.map((row) => {
@@ -909,10 +937,19 @@ function recalcAndRender() {
       }
     }
 
-    const profit = row.amount - cost;
+    // 這幾個編號的銷貨金額原始是美金，要先乘美金匯率換算成台幣，
+    // 才能拿去跟台幣計價的成本一起算毛利；換算後的金額也會取代
+    // 原始的 row.amount，讓後面所有頁面看到的都是換算後的台幣金額。
+    let amount = row.amount;
+    if (hasUsdRate && USD_ITEM_CODES.includes(codeUpper)) {
+      amount = amount * usdRateVal;
+    }
+
+    const profit = amount - cost;
 
     return {
       ...row,
+      amount,
       unitPrice,
       cost,
       profit,
