@@ -69,6 +69,12 @@ const SERIES_CODE_ALIAS_MAP = {
   "H15CB": "H150CB",
   "HST-046": "HST-045",
   "ATM-012BK": "ATM-012",
+  "FSG-2-017": "FSG-2-015",
+  "H140CB": "H14CB",
+  "H14": "H140",
+  "FSG-3-035": "FSG-3-037",
+  "HST-043": "HST-045",
+  "HST-023": "HST-025",
 };
 const SERIES_NAME_ALIAS_MAP = {
   "矽套管 3.7mm* 38mm": "FSG-3-035",
